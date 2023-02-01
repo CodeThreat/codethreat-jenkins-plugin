@@ -1,0 +1,2 @@
+_extends: .github
+tag-template: codethreat-scanner-$NEXT_MINOR_VERSION
