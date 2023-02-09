@@ -82,6 +82,7 @@ import hudson.security.ACL;
 import com.cloudbees.plugins.credentials.domains.DomainRequirement;
 import javax.annotation.Nonnull;
 import java.io.File;
+import java.util.regex.Pattern;
 
 
 public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
@@ -101,14 +102,16 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
     private String username;
     private Secret accessTokenSecret;
     private String fileName;
+    private String credentialsId;
 
     @DataBoundConstructor
-    public CodeThreatBuilder(String ctServer, Integer max_number_of_critical, Integer max_number_of_high, String weakness_is, String condition, String project_name, String fileName ) throws IOException {
+    public CodeThreatBuilder(String ctServer, Integer max_number_of_critical, Integer max_number_of_high, String weakness_is, String condition, String project_name, String fileName, String credentialsId ) throws IOException {
         this.ctServer = ctServer;
         this.fileName = fileName;
         this.project_name = project_name;
         this.max_number_of_critical = max_number_of_critical;
         this.max_number_of_high = max_number_of_high;
+        this.credentialsId = credentialsId;
 
         if(weakness_is == null)
             this.weakness_is = "";
@@ -567,22 +570,21 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
     public void perform(Run<?, ?> run, FilePath workspace, EnvVars env, Launcher launcher, TaskListener listener) throws InterruptedException, IOException, AbortException {
 
 
-        List<StandardUsernamePasswordCredentials> credentials = CredentialsProvider.lookupCredentials(StandardUsernamePasswordCredentials.class, Jenkins.get(), ACL.SYSTEM, new ArrayList<DomainRequirement>());
+            List<StandardUsernamePasswordCredentials> credentials = CredentialsProvider.lookupCredentials(StandardUsernamePasswordCredentials.class, Jenkins.get(), ACL.SYSTEM, new ArrayList<DomainRequirement>());
 
-        for (StandardUsernamePasswordCredentials cred : credentials) {
-            if (cred.getId().equals("codethreat_credentials")) {
-            username = cred.getUsername();
-            password = cred.getPassword();
-            break;
+            for (StandardUsernamePasswordCredentials cred : credentials) {
+                if (cred.getId().equals(credentialsId)) {
+                username = cred.getUsername();
+                password = cred.getPassword();
+                break;
+                }
             }
-        }
 
             accessTokenSecret = getToken(username,password);
-            String fullFileName = "/private"+workspace+"/"+fileName;
+            String fullFileName = workspace + File.separator + fileName;
             File fullFile = new File(fullFileName);
-            String canonicalFilePath = fullFile.getCanonicalPath();
-
-            if(fullFileName.compareTo(canonicalFilePath) != 0) {
+            
+            if (fullFileName.length() > 100) {
                 throw new AbortException(" ---> Disallowed file name");
             }
         
