@@ -1,4 +1,4 @@
 <?jelly escape-by-default='true'?>
 <div>
-    CodeThreat
+    The Jenkins integration plugin allows users to integrate their CodeThreat SAST server. This integration enables users to automate the process of running security scans on their applications as part of their CI/CD pipeline. With the plugin, users can easily configure and trigger SAST scans from within Jenkins, receive notifications of any security vulnerabilities found, and view the results directly. This streamlines the application security testing process, reducing the time and effort required to manually run security scans and enabling developers to quickly address any security issues that are discovered.
 </div>

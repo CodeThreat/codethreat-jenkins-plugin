@@ -1,4 +1,4 @@
-package io.jenkins.plugins.sample;
+package io.jenkins.plugins;
 
 import hudson.model.Action;
 import hudson.Launcher;
@@ -80,11 +80,29 @@ import jenkins.model.RunAction2;
 
 public class CodeThreatAction implements RunAction2  {
 
-    private String html;
+    private Number critical;
+    private Number high;
+    private Number medium;
+    private Number low;
+    private Number total;
+    private Number totalCountNewIssues;
+    private Map<String, Integer> newIssuesSeverity;
+    private List<Map<String, Object>> resultList;
+    private String durationTime;
+    private String riskScore;
 
 
-    public CodeThreatAction(String html) {
-        this.html = html;
+    public CodeThreatAction(Number critical,Number high,Number medium,Number low,Number total,Number totalCountNewIssues,Map<String, Integer> newIssuesSeverity,List<Map<String, Object>> resultList,String durationTime,String riskScore) {
+        this.critical = critical;
+        this.high = high;
+        this.medium = medium;
+        this.low = low;
+        this.total = total;
+        this.totalCountNewIssues = totalCountNewIssues;
+        this.newIssuesSeverity = newIssuesSeverity;
+        this.resultList = resultList;
+        this.durationTime = durationTime;
+        this.riskScore = riskScore;
     }
 
     private transient Run run; 
@@ -103,8 +121,44 @@ public class CodeThreatAction implements RunAction2  {
         return run;
     }
 
-    public String getHtml() {
-        return html;
+    public Number getCritical() {
+        return critical;
+    }
+
+    public Number getHigh() {
+        return high;
+    }
+
+    public Number getMedium() {
+        return medium;
+    }
+
+    public Number getLow() {
+        return low;
+    }
+
+    public Number getTotal() {
+        return total;
+    }
+
+    public Number getTotalCountNewIssues() {
+        return totalCountNewIssues;
+    }
+
+    public Map<String, Integer> getNewIssuesSeverity() {
+        return newIssuesSeverity;
+    }
+
+    public List<Map<String, Object>> getResultList() {
+        return resultList;
+    }
+
+    public String getDurationTime() {
+        return durationTime;
+    }
+
+    public String getRiskScore() {
+        return riskScore;
     }
 
 

@@ -16,29 +16,36 @@ With CodeThreat custom rule engine, we have wide language and framework support 
 An example script for Jenkins Pipeline Item should be as follows.
 
 ```script
-node {
-   stage("Deploy") {
-     git url: 'https://github.com/<exampleUser>/<exampleRepo>', branch: 'main' //example file
-     sh 'zip -r example.zip .'
-   }
-   stage("Scan") {
-      withCredentials([usernamePassword(credentialsId: 'your_credentials_id', usernameVariable: 'username', passwordVariable: 'password')]) {
-        CodeThreatScan(
-            username:username, 
-            password:password, 
-            ctServer:env.ctServer_URL, 
-            file: new File("${env.WORKSPACE}/example.zip"), 
-            max_number_of_high: 23,
-            max_number_of_critical: 23,
-            weakness_is: ".*injection,buffer.over.read,mass.assigment", 
-            condition: "OR",
-            project_name: "exampleProjectName",
-            )
-      }
-   }
+
+pipeline {
+    agent any
+    stages {
+        stage("Clone") {
+            steps {
+               git url: 'https://github.com/<exampleUser>/<exampleRepo>', branch: 'main' //example file
+               sh 'zip -r example.zip .'
+            }
+        }
+        stage("Scan") {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'codethreat_credentials', usernameVariable: 'username', passwordVariable: 'password')]) {
+                    CodeThreatScan(
+                        ctServer: env.ctServer_URL,
+                        fileName:"webg.zip",
+                        max_number_of_high: 23,
+                        max_number_of_critical: 23,
+                        weakness_is: ".*injection,buffer.over.read,mass.assigment", 
+                        condition: "OR",
+                        project_name: "exampleProjectName"
+                   )
+                }
+            }
+        }
+    }
 }
 
 ```
+* The credentials ID should be "codethreat_credentials".
 
 * In `env` section, you can use either the USERNAME,PASSWORD pair as one of the authentication method.
 

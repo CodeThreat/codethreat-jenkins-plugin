@@ -1,0 +1,59 @@
+<?jelly escape-by-default='true'?>
+<j:jelly xmlns:j="jelly:core" xmlns:l="/lib/layout" xmlns:st="jelly:stapler">
+    <l:layout title="CodeThreat Scan Result">
+        <l:side-panel> 
+            <st:include page="sidepanel.jelly" it="${it.run}" optional="true" /> 
+        </l:side-panel>
+        <l:main-panel>
+        <html>
+        <head>
+            <style>table{border-collapse: collapse;} th, td {border: 1px solid black;padding: 8px;text-align: center;vertical-align: middle;}th {background-color: white;}tr:nth-child(even) td {background-color: lightgray;}ul {list-style-type: none;padding: 0;margin: 0;}li {padding: 8px;color: blue;}a {color: #4169E1;text-decoration: none;}</style>
+        </head>
+           <h2>Result</h2>
+           <table>
+                <tr>
+                    <th><b>Weakness</b></th>
+                    <th><b>Total Issue</b></th>
+                    <th><b>New Issue</b></th>
+                </tr>
+                <tr>
+                    <th><em>🔴 Critical</em></th>
+                    <th>${it.critical}</th>
+                    <th>${it.newIssuesSeverity.get('critical')}</th>
+                </tr>
+                <tr>
+                    <th><em>🟠 High</em></th>
+                    <th>${it.high}</th>
+                    <th>${it.newIssuesSeverity.get('high')}</th>
+                </tr>
+                <tr>
+                    <th><em>🟡 Medium</em></th>
+                    <th>${it.medium}</th>
+                    <th>${it.newIssuesSeverity.get('medium')}</th>
+                </tr>
+                <tr>
+                    <th><em>🔵 Low</em></th>
+                    <th>${it.low}</th>
+                    <th>${it.newIssuesSeverity.get('low')}</th>
+                </tr>
+                <tr>
+                    <th><em>🔘 TOTAL</em></th>
+                    <th>${it.total}</th>
+                    <th>${it.totalCountNewIssues}</th>
+                </tr>
+           </table>
+           <hr/>
+           <h2>Weaknesses</h2>
+            <ul>
+                <j:forEach var="item" items="${it.resultList}">
+                    <li><a href='${item.link}'>🔲 ${item.title} -> ${item.count}</a></li>
+                </j:forEach>
+            </ul>
+            <hr/>
+            <p>⏳ Duration Time --> ${it.durationTime}</p>
+            <p>❗ Risk Score --> ${it.riskScore}</p>
+           </html>
+        </l:main-panel>
+    </l:layout>
+</j:jelly>
+

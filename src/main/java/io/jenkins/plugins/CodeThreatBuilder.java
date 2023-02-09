@@ -1,4 +1,4 @@
-package io.jenkins.plugins.sample;
+package io.jenkins.plugins;
 
 import hudson.Launcher;
 import hudson.EnvVars;
@@ -69,16 +69,26 @@ import com.google.gson.JsonParser;
 import com.google.gson.JsonObject;
 
 
+import hudson.util.Secret;
+import com.cloudbees.plugins.credentials.CredentialsProvider;
+import com.cloudbees.plugins.credentials.CredentialsScope;
+import com.cloudbees.plugins.credentials.domains.Domain;
+import com.cloudbees.plugins.credentials.Credentials;
+import com.cloudbees.plugins.credentials.impl.UsernamePasswordCredentialsImpl;
+import com.cloudbees.plugins.credentials.common.StandardUsernamePasswordCredentials;
+import hudson.security.ACL;
+
+
+import com.cloudbees.plugins.credentials.domains.DomainRequirement;
+import javax.annotation.Nonnull;
+import java.io.File;
+
 
 public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
 
-    private final String username;
-    private final String password;
     private final String ctServer;
-    private final File file;
     private Integer max_number_of_critical;
     private Integer max_number_of_high;
-    private String access_token;
     private String scanId;
     private String scanStatus;
     private final String weakness_is;
@@ -87,25 +97,18 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
     private String title="";
     private String severity="";
 
+    private Secret password;
+    private String username;
+    private Secret accessTokenSecret;
+    private String fileName;
+
     @DataBoundConstructor
-    public CodeThreatBuilder(String username, String password, String ctServer, File file, Integer max_number_of_critical, Integer max_number_of_high, String weakness_is, String condition, String project_name ) throws IOException {
-        this.username = username;
-        this.password = password;
+    public CodeThreatBuilder(String ctServer, Integer max_number_of_critical, Integer max_number_of_high, String weakness_is, String condition, String project_name, String fileName ) throws IOException {
         this.ctServer = ctServer;
-        this.file = file;
+        this.fileName = fileName;
         this.project_name = project_name;
         this.max_number_of_critical = max_number_of_critical;
         this.max_number_of_high = max_number_of_high;
-
-        this.access_token = getToken();
-
-        if (this.access_token != null) {
-            this.scanId = uploadFile();
-        }
-
-        if (this.scanId != null) {
-            this.scanStatus = awaitScan();
-        }
 
         if(weakness_is == null)
             this.weakness_is = "";
@@ -119,24 +122,8 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
 
     }
 
-    public String getName() {
-        return username;
-    }
-
-    public String getPassword() {
-        return password;
-    }
-
     public String getCtServer() {
         return ctServer;
-    }
-
-    public File getZipFile() {
-        return file;
-    }
-
-    public String getAccess_token() {
-        return access_token;
     }
 
     public String getScanId() {
@@ -175,7 +162,7 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
         return severity;
     }
 
-    public String getToken() throws IOException {
+    public Secret getToken(String username, Secret password) throws IOException {
 
         OkHttpClient client = new OkHttpClient();
         MediaType mediaType = MediaType.parse("application/json");
@@ -187,21 +174,27 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
             .url(ctServer+"api/signin")
             .post(body)
             .build();
+            
         Response response = client.newCall(request).execute();
+         if (!response.isSuccessful())
+            throw new IOException("Unexpected code " + response);
+
+        ResponseBody body1 = response.body();
+        if (body1 == null)
+            throw new IOException("Unexpected body to be null");
+
         ObjectMapper mapper = new ObjectMapper();
-        JsonNode jsonNode = mapper.readValue(response.body().string(), JsonNode.class);
-        access_token = jsonNode.get("access_token").asText();
-        return access_token;
+        JsonNode jsonNode = mapper.readValue(body1.string(), JsonNode.class);
+        return Secret.fromString(jsonNode.get("access_token").asText());
     }
     
-    public String uploadFile() throws IOException {
+    public String uploadFile(Secret accessTokenSecret, File fullFile) throws IOException {
 
-        // String pname = "DENEMEJENKINS";
         OkHttpClient client = new OkHttpClient();
         MediaType mediaType = MediaType.parse("application/zip");
-        RequestBody fileBody = RequestBody.create(mediaType, file);
+        RequestBody fileBody = RequestBody.create(mediaType, fullFile);
         MultipartBody.Builder builder = new MultipartBody.Builder().setType(MultipartBody.FORM);
-        builder.addFormDataPart("upfile", "deneme.zip", fileBody);
+        builder.addFormDataPart("upfile", project_name+".zip", fileBody);
         builder.addFormDataPart("project", project_name);
         builder.addFormDataPart("from", "jenkins");
         RequestBody requestBody = builder.build();
@@ -209,27 +202,37 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
         Request request = new Request.Builder()
                 .url(ctServer+"api/scan/start")
                 .post(requestBody)
-                .addHeader("Authorization", "Bearer " + access_token)
+                .addHeader("Authorization", "Bearer " + accessTokenSecret)
                 .addHeader("x-ct-organization", "codethreat")
                 .build();
         Response response = client.newCall(request).execute();
+        if (!response.isSuccessful())
+            throw new IOException("Unexpected code " + response);
+
+        ResponseBody body1 = response.body();
+        if (body1 == null)
+            throw new IOException("Unexpected body to be null");
         ObjectMapper mapper = new ObjectMapper();
-        JsonNode jsonNode = mapper.readValue(response.body().string(), JsonNode.class);
-        scanId = jsonNode.get("scan_id").asText();
-        return scanId;
+        JsonNode jsonNode = mapper.readValue(body1.string(), JsonNode.class);
+        return jsonNode.get("scan_id").asText();
     }
 
-    public String awaitScan() throws IOException {
+    public String awaitScan(String scanId, Secret accessTokenSecret) throws IOException {
         OkHttpClient client = new OkHttpClient();
         Request request = new Request.Builder()
             .url(ctServer+"api/scan/status/"+scanId)
             .get()
-            .addHeader("Authorization", "Bearer " + access_token)
+            .addHeader("Authorization", "Bearer " + accessTokenSecret)
             .addHeader("x-ct-organization", "codethreat")
             .build();
             Response response = client.newCall(request).execute();
-            scanStatus = response.body().string();
-            return scanStatus;
+            if (!response.isSuccessful())
+            throw new IOException("Unexpected code " + response);
+
+            ResponseBody body1 = response.body();
+            if (body1 == null)
+                throw new IOException("Unexpected body to be null");
+            return body1.string();
     }
 
     public static String convertToHHMMSS(Integer endedAt, Integer startedAt) {
@@ -342,9 +345,8 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
         return null;
     }
 
-    public String[] newIssue() throws IOException {
+    public String[] newIssue(Secret accessTokenSecret) throws IOException {
 
-        // String projectName = "DENEMEJENKINS";
         JSONArray historical = new JSONArray();
         historical.put("New Issue");
 
@@ -361,13 +363,17 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
         Request request = new Request.Builder()
             .url(ctServer+"api/scanlog/issues?q="+encodedQ+"&pageSize=500")
             .get()
-            .addHeader("Authorization", "Bearer " + access_token)
+            .addHeader("Authorization", "Bearer " + accessTokenSecret)
             .addHeader("x-ct-organization", "codethreat")
             .build();
         Response response = client.newCall(request).execute();
-        Headers headers = response.headers();
-        // String jsonString1 = new String(Base64.getDecoder().decode(headers.get("x-ct-pager").getBytes()));
-        byte[] headerBytes = headers.get("x-ct-pager").getBytes(StandardCharsets.UTF_8);
+        if (!response.isSuccessful())
+            throw new IOException("Unexpected code " + response);
+
+        String headers = response.headers().get("x-ct-pager");
+        if (headers == null)
+            throw new IOException("Unexpected body to be null");
+        byte[] headerBytes = headers.getBytes(StandardCharsets.UTF_8);
         String jsonString1 = new String(Base64.getDecoder().decode(headerBytes), StandardCharsets.UTF_8);
         JSONObject xCtPager = new JSONObject(jsonString1);
 
@@ -379,11 +385,17 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
                 Request newRequest = new Request.Builder()
                     .url(ctServer+"api/scanlog/issues?q=" + encodedQ + "&pid=" + pid + "&page=" + i)
                     .get()
-                    .addHeader("Authorization", "Bearer " + access_token)
+                    .addHeader("Authorization", "Bearer " + accessTokenSecret)
                     .addHeader("x-ct-organization", "codethreat")
                     .build();
                 Response newResponse = client.newCall(newRequest).execute();
-                JSONArray responseArray = new JSONArray(newResponse.body().string());
+                if (!response.isSuccessful())
+                    throw new IOException("Unexpected code " + response);
+
+                ResponseBody body1 = response.body();
+                if (body1 == null)
+                    throw new IOException("Unexpected body to be null");
+                JSONArray responseArray = new JSONArray(body1.string());
                 extractedArray = new String[responseArray.length()];
 
                 for (int j = 0; j < responseArray.length(); j++) {
@@ -394,9 +406,7 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
                 return extractedArray;
     }
 
-    public String[] allIssue() throws IOException {
-
-        // String projectName = "DENEMEJENKINS";
+    public String[] allIssue(Secret accessTokenSecret) throws IOException {
 
         JSONObject query = new JSONObject();
         query.put("projectName", project_name);
@@ -409,30 +419,39 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
         Request request = new Request.Builder()
             .url(ctServer+"api/scanlog/issues?q="+encodedQ+"&pageSize=500")
             .get()
-            .addHeader("Authorization", "Bearer " + access_token)
+            .addHeader("Authorization", "Bearer " + accessTokenSecret)
             .addHeader("x-ct-organization", "codethreat")
             .build();
         Response response = client.newCall(request).execute();
-        Headers headers = response.headers();
-        byte[] headerBytes = headers.get("x-ct-pager").getBytes(StandardCharsets.UTF_8);
+        if (!response.isSuccessful())
+                    throw new IOException("Unexpected code " + response);
+
+        String headers = response.headers().get("x-ct-pager");
+        if (headers == null)
+            throw new IOException("Unexpected body to be null");
+        byte[] headerBytes = headers.getBytes(StandardCharsets.UTF_8);
         String jsonString1 = new String(Base64.getDecoder().decode(headerBytes), StandardCharsets.UTF_8);
         JSONObject xCtPager = new JSONObject(jsonString1);
 
         int pages = xCtPager.getInt("pages");
         String pid = xCtPager.getString("id");
 
-        //String[] allData = {};
-        // ArrayList<String> result = new ArrayList<>();
         String[] extractedArray = new String[0];
             for (int i = 1; i <= pages; i++) {
                 Request newRequest = new Request.Builder()
                     .url(ctServer+"api/scanlog/issues?q=" + encodedQ + "&pid=" + pid + "&page=" + i)
                     .get()
-                    .addHeader("Authorization", "Bearer " + access_token)
+                    .addHeader("Authorization", "Bearer " + accessTokenSecret)
                     .addHeader("x-ct-organization", "codethreat")
                     .build();
                 Response newResponse = client.newCall(newRequest).execute();
-                JSONArray responseArray = new JSONArray(newResponse.body().string());
+                if (!response.isSuccessful())
+                    throw new IOException("Unexpected code " + response);
+
+                ResponseBody body1 = response.body();
+                if (body1 == null)
+                    throw new IOException("Unexpected body to be null");
+                JSONArray responseArray = new JSONArray(body1.string());
                 extractedArray = new String[responseArray.length()];
 
                 for (int j = 0; j < responseArray.length(); j++) {
@@ -498,29 +517,6 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
        return result;
     }
 
-    public static List<Map<String, Object>> groupAndCount(String[] arr) {   
-        Map<String, Map<String, Object>> map = new HashMap<>();
-        for (String str : arr) {
-        Map<String, Object> json = new Gson().fromJson(str, Map.class);
-        Map<String, Object> issueState = (Map<String, Object>) json.get("issue_state");
-        Map<String, Object> kbFields = (Map<String, Object>) json.get("kb_fields");
-        String title = ((Map<String, String>) kbFields.get("title")).get("en");
-        String severity = (String) issueState.get("severity");
-        if (map.containsKey(title)) {
-        Map<String, Object> stored = map.get(title);
-        int count = (int) stored.get("count");
-        stored.put("count", count + 1);
-        } else {
-        Map<String, Object> stored = new HashMap<>();
-        stored.put("title", title);
-        stored.put("count", 1);
-        stored.put("severity", severity);
-        map.put(title, stored);
-        }
-        }
-        return new ArrayList<>(map.values());
-    }
-
     public static List<Map<String, Object>> groupIssues(String[] arr) {
         Map<String, Integer> titleCount = new HashMap<>();
         Map<String, String> titleSeverity = new HashMap<>();
@@ -553,26 +549,6 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
         return result;
     }
 
-    private static Map<String, Object> parseJson(String json) {
-        Map<String, Object> map = new HashMap<>();
-        Pattern pattern = Pattern.compile("\"(.*?)\":\\s*\"(.*?)\"");
-        Matcher matcher = pattern.matcher(json);
-
-        while (matcher.find()) {
-            String key = matcher.group(1);
-            String value = matcher.group(2);
-            if (key.equals("title")) {
-                value = value.split("en\":")[1].split("\",")[0].replace("\"", "");
-            }
-            if (key.equals("severity")) {
-                value = value.replace("\"", "");
-            }
-            map.put(key, value);
-        }
-
-        return map;
-    }
-
     public static Map<String, Integer> countSeverity(List<Map<String, Object>> list) {
         Map<String, Integer> result = new HashMap<>();
         result.put("critical", 0);
@@ -590,8 +566,32 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
     @Override
     public void perform(Run<?, ?> run, FilePath workspace, EnvVars env, Launcher launcher, TaskListener listener) throws InterruptedException, IOException, AbortException {
 
+
+        List<StandardUsernamePasswordCredentials> credentials = CredentialsProvider.lookupCredentials(StandardUsernamePasswordCredentials.class, Jenkins.get(), ACL.SYSTEM, new ArrayList<DomainRequirement>());
+
+        for (StandardUsernamePasswordCredentials cred : credentials) {
+            if (cred.getId().equals("codethreat_credentials")) {
+            username = cred.getUsername();
+            password = cred.getPassword();
+            break;
+            }
+        }
+
+            accessTokenSecret = getToken(username,password);
+            String fullFileName = "/private"+workspace+"/"+fileName;
+            File fullFile = new File(fullFileName);
+            String canonicalFilePath = fullFile.getCanonicalPath();
+
+            if(fullFileName.compareTo(canonicalFilePath) != 0) {
+                throw new AbortException(" ---> Disallowed file name");
+            }
+        
+            scanId = uploadFile(accessTokenSecret,fullFile);
+            scanStatus = awaitScan(scanId,accessTokenSecret);
             listener.getLogger().println(" ---> SCAN STARTED!");
+
             while(true){
+
                 ObjectMapper mapper = new ObjectMapper();
                 JsonNode jsonNode = mapper.readValue(scanStatus, JsonNode.class);
                 Integer critical = jsonNode.get("severities").get("critical") != null ? jsonNode.get("severities").get("critical").asInt() : 0;
@@ -609,53 +609,15 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
                     listener.getLogger().println("Risk Score --> "+getScore(jsonNode.get("riskscore").asInt()));
 
                     String[] weaknessArr = weakness_is.split(",");
-                    ArrayList<String> weaknessIsCount = findWeaknessTitles(allIssue(), weaknessArr);
+                    ArrayList<String> weaknessIsCount = findWeaknessTitles(allIssue(accessTokenSecret), weaknessArr);
                     
-                    List<Map<String,Object>> newIssuesData = groupIssues(newIssue());
+                    List<Map<String,Object>> newIssuesData = groupIssues(newIssue(accessTokenSecret));
                     Map<String, Integer> newIssuesSeverity = countSeverity(newIssuesData);
-                    List<Map<String,Object>> allIssuesData = groupIssues(allIssue());
+                    List<Map<String,Object>> allIssuesData = groupIssues(allIssue(accessTokenSecret));
                     int totalCountNewIssues = 0;
                     for (Map<String, Object> obj : newIssuesData) {
                     totalCountNewIssues += (Integer) obj.get("count");
                     }
-
-                    String html = "<html>\n" +
-                                "  <head>\n" +
-                                "  <title>Report</title>\n";
-
-                    StringBuilder style = new StringBuilder("<style>table{border-collapse: collapse;} th, td {border: 1px solid black;padding: 8px;text-align: center;vertical-align: middle;}th {background-color: white;}tr:nth-child(even) td {background-color: lightgray;}ul {list-style-type: none;padding: 0;margin: 0;}li {padding: 8px;color: blue;}a {color: #4169E1;text-decoration: none;}</style>\n");
-                    html += style;
-                    html +=  "  </head>\n" +
-                             "  <body style='font-family:helvetica'>\n";
-                               
-                    html += "<h2>Result</h2>";
-
-                    String table = "<table >";
-                    table += "<tr><th >Weakness</th><th >Total Issue</th><th >New Issue</th></tr>";
-
-                    StringBuilder trCritical = new StringBuilder("<tr>\n");
-                    trCritical.append("  <td ><em>").append("🔴 Critical").append("</em></td>\n");
-                    trCritical.append("  <td >").append(critical).append("</td>\n");
-                    trCritical.append("  <td >").append(newIssuesSeverity.get("critical")).append("</td>\n");
-                    trCritical.append("</tr>");
-
-                    StringBuilder trHigh = new StringBuilder("<tr>\n");
-                    trHigh.append("  <td ><em>").append("🟠 High").append("</em></td>\n");
-                    trHigh.append("  <td >").append(high).append("</td>\n");
-                    trHigh.append("  <td >").append(newIssuesSeverity.get("high")).append("</td>\n");
-                    trHigh.append("</tr>");
-
-                    StringBuilder trMedium = new StringBuilder("<tr>\n");
-                    trMedium.append("  <td ><em>").append("🟡 Medium").append("</em></td>\n");
-                    trMedium.append("  <td >").append(medium).append("</td>\n");
-                    trMedium.append("  <td >").append(newIssuesSeverity.get("medium")).append("</td>\n");
-                    trMedium.append("</tr>");
-
-                    StringBuilder trLow = new StringBuilder("<tr>\n");
-                    trLow.append("  <td ><em>").append("🔵 Low").append("</em></td>\n");
-                    trLow.append("  <td >").append(low).append("</td>\n");
-                    trLow.append("  <td >").append(newIssuesSeverity.get("low")).append("</td>\n");
-                    trLow.append("</tr>");
 
                     int total = 0;
                     JsonNode severities = jsonNode.get("severities");
@@ -663,79 +625,52 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
                         total += severity.asInt();
                     }
 
-                    StringBuilder trTotal = new StringBuilder("<tr>\n");
-                    trTotal.append("  <td ><em>").append("🔘 TOTAL").append("</em></td>\n");
-                    trTotal.append("  <td >").append(total).append("</td>\n");
-                    trTotal.append("  <td >").append(totalCountNewIssues).append("</td>\n");
-                    trTotal.append("</tr>");
-
-                    table += trCritical;
-                    table += trHigh;
-                    table += trMedium;
-                    table += trLow;
-                    table += trTotal;
-
-                    html += table;
-                    html += "</table>";
-
-                    html += "<h2>Weaknesses</h2>";
-
-                    StringBuilder weaknessListUl = new StringBuilder("<ul >");
-                    html += weaknessListUl;
-                    StringBuilder weaknessList = new StringBuilder("");
-
+                    List<Map<String, Object>> resultList = new ArrayList<>();
                     for (Map<String, Object> item : allIssuesData) {
-                    JSONObject query = new JSONObject();
-                    query.put("projectName", project_name);
-                    query.put("issuename", item.get("title"));
+                        JSONObject query = new JSONObject();
+                        query.put("projectName", project_name);
+                        query.put("issuename", item.get("title"));
 
-                    String jsonString = query.toString();
-                    byte[] jsonBytes = jsonString.getBytes(StandardCharsets.UTF_8);
-                    String encodedQ = Base64.getEncoder().encodeToString(jsonBytes);
+                        String jsonString = query.toString();
+                        byte[] jsonBytes = jsonString.getBytes(StandardCharsets.UTF_8);
+                        String encodedQ = Base64.getEncoder().encodeToString(jsonBytes);
 
-                    StringBuilder weaknessLi = new StringBuilder("<li>\n");
-                    StringBuilder weaknessA = new StringBuilder("<a href='\n");
-                    weaknessA.append(ctServer+"issues?q="+encodedQ);
-                    weaknessA.append("'>");
-                    weaknessA.append(item.get("title"));
-                    weaknessA.append(" --> (");
-                    weaknessA.append(item.get("count"));
-                    weaknessA.append(")");
-                    weaknessA.append("</a>");
-                    weaknessLi.append(weaknessA);
-                    weaknessLi.append("</li>");
-                    weaknessList.append(weaknessLi);
+                        String link = ctServer+"issues?q="+encodedQ;
+                        String count = item.get("count").toString();
+                        String title = item.get("title").toString();
+
+                        Map<String, Object> result = new HashMap<>();
+                        result.put("link", link);
+                        result.put("count", count);
+                        result.put("title", title);
+
+                        resultList.add(result);
                     }
-                    html += weaknessList;
-                    html += "</ul>";
 
-                    html += "<p>⏳ Scan Duration: "+convertToHHMMSS(jsonNode.get("ended_at").asInt(),jsonNode.get("started_at").asInt())+"</p>";
-                    html += "<p>❗ Risk Score: -> "+getScore(jsonNode.get("riskscore").asInt())+"</p>";
+                    String durationTime = convertToHHMMSS(jsonNode.get("ended_at").asInt(),jsonNode.get("started_at").asInt());
+                    String riskScore = getScore(jsonNode.get("riskscore").asInt());
 
-                    html += "  </body>\n" +
-                    "</html>";
-
-                if(condition == "OR"){
+                    if(condition == "OR"){
                         if(max_number_of_critical != null && critical > max_number_of_critical){
-                            run.addAction(new CodeThreatAction(html));
+                            run.addAction(new CodeThreatAction(critical,high,medium,low,total,totalCountNewIssues,newIssuesSeverity,resultList,durationTime,riskScore));
                             throw new AbortException(" ---> Critical limit exceeded");
                         }
                         if(max_number_of_high != null && high > max_number_of_high){
-                            run.addAction(new CodeThreatAction(html));
+                            run.addAction(new CodeThreatAction(critical,high,medium,low,total,totalCountNewIssues,newIssuesSeverity,resultList,durationTime,riskScore));
                             throw new AbortException(" ---> High limit exceeded");
                         }
                         if(weaknessIsCount.size() > 0){
-                            run.addAction(new CodeThreatAction(html));
+                            run.addAction(new CodeThreatAction(critical,high,medium,low,total,totalCountNewIssues,newIssuesSeverity,resultList,durationTime,riskScore));
                             throw new AbortException(" ---> Weaknesses entered in the weakness_is key were found during the scan.");
                         }
                     } else if(condition == "AND"){
                         if((max_number_of_critical != null && critical > max_number_of_critical) || (max_number_of_high != null && high > max_number_of_high) ||  weaknessIsCount.size() > 0){
-                            run.addAction(new CodeThreatAction(html));
+                            run.addAction(new CodeThreatAction(critical,high,medium,low,total,totalCountNewIssues,newIssuesSeverity,resultList,durationTime,riskScore));
                             throw new AbortException(" ---> Not all conditions are met according to the given arguments");
                         }
                     }
 
-                run.addAction(new CodeThreatAction(html));
+                run.addAction(new CodeThreatAction(critical,high,medium,low,total,totalCountNewIssues,newIssuesSeverity,resultList,durationTime,riskScore));
                     break;
                 } else {
                     listener.getLogger().println("------------- SCAN STATUS "+"(%"+jsonNode.get("progress_data").get("progress").asInt()+")"+" -------------");
@@ -744,7 +679,7 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
                     listener.getLogger().println("- Medium --> " + medium);
                     listener.getLogger().println("- Low --> " + low);
                     Thread.sleep(3000);
-                    awaitScan();
+                    scanStatus = awaitScan(scanId,accessTokenSecret);
                 }
             }
     }
