@@ -36,7 +36,8 @@ pipeline {
                         max_number_of_critical: 23,
                         weakness_is: ".*injection,buffer.over.read,mass.assigment", 
                         condition: "OR",
-                        project_name: "exampleProjectName"
+                        project_name: "exampleProjectName",
+                        credentialsId: "codethreat_credentials"
                    )
                 }
             }

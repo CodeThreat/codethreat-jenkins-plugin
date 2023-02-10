@@ -583,10 +583,24 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
             accessTokenSecret = getToken(username,password);
             String fullFileName = workspace + File.separator + fileName;
             File fullFile = new File(fullFileName);
-            
-            if (fullFileName.length() > 100) {
-                throw new AbortException(" ---> Disallowed file name");
+            String canonicalFilePath = fullFile.getCanonicalPath();
+
+            String replaceString=null;
+
+            if(canonicalFilePath.indexOf("/private") != -1){
+                replaceString=canonicalFilePath.replace("/private","");
             }
+
+            if(replaceString != null){
+                if(fullFileName.compareTo(replaceString) != 0) {
+                    throw new AbortException(" ---> Disallowed file name");
+                }
+            } else {
+                if(fullFileName.compareTo(canonicalFilePath) != 0) {
+                    throw new AbortException(" ---> Disallowed file name");
+                }
+            }
+
         
             scanId = uploadFile(accessTokenSecret,fullFile);
             scanStatus = awaitScan(scanId,accessTokenSecret);
