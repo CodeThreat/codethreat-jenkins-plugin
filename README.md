@@ -31,7 +31,7 @@ pipeline {
                 withCredentials([usernamePassword(credentialsId: 'codethreat_credentials', usernameVariable: 'username', passwordVariable: 'password')]) {
                     CodeThreatScan(
                         ctServer: env.ctServer_URL,
-                        fileName:"webg.zip",
+                        fileName:"example.zip",
                         max_number_of_high: 23,
                         max_number_of_critical: 23,
                         weakness_is: ".*injection,buffer.over.read,mass.assigment", 
@@ -46,8 +46,6 @@ pipeline {
 }
 
 ```
-* The credentials ID should be "codethreat_credentials".
-
 * In `env` section, you can use either the USERNAME,PASSWORD pair as one of the authentication method.
 
 * If more args are provided, they will be `AND`ed together.
