@@ -12,4 +12,4 @@ jobs:
     uses: jenkins-infra/github-reusable-workflows/.github/workflows/maven-cd.yml@v1
     secrets:
       MAVEN_USERNAME: ${{ secrets.MAVEN_USERNAME }}
-      MAVEN_TOKEN: ${{ secrets.MAVEN_TOKEN }}
+      MAVEN_TOKEN: ${{ secrets.MAVEN_TOKEN }} 

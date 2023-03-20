@@ -201,12 +201,12 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
         builder.addFormDataPart("project", project_name);
         builder.addFormDataPart("from", "jenkins");
         RequestBody requestBody = builder.build();
-
         Request request = new Request.Builder()
-                .url(ctServer+"api/scan/start")
+                .url(ctServer+"api/plugins/jenkins")
                 .post(requestBody)
                 .addHeader("Authorization", "Bearer " + accessTokenSecret)
                 .addHeader("x-ct-organization", "codethreat")
+                .addHeader("x-ct-plugin", "jenkins")
                 .build();
         Response response = client.newCall(request).execute();
         if (!response.isSuccessful())
