@@ -25,7 +25,7 @@
         <tag>${scmTag}</tag>
         <url>https://github.com/${gitHubRepo}</url>
     </scm>    <properties>
-        <revision>1</revision>
+        <revision>1.0.1</revision>
         <changelist>999999-SNAPSHOT</changelist>
 
         <!-- https://www.jenkins.io/doc/developer/plugin-development/choosing-jenkins-baseline/ -->
