@@ -16,6 +16,8 @@ import org.kohsuke.stapler.QueryParameter;
 import javax.servlet.ServletException;
 import java.io.IOException;
 import jenkins.tasks.SimpleBuildStep;
+
+import org.acegisecurity.Authentication;
 import org.jenkinsci.Symbol;
 import org.kohsuke.stapler.DataBoundSetter;
 
@@ -68,15 +70,20 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonObject;
 
+import org.jenkinsci.plugins.plaincredentials.StringCredentials;
 
 import hudson.util.Secret;
 import com.cloudbees.plugins.credentials.CredentialsProvider;
 import com.cloudbees.plugins.credentials.CredentialsScope;
+import com.cloudbees.plugins.credentials.CredentialsStore;
 import com.cloudbees.plugins.credentials.domains.Domain;
 import com.cloudbees.plugins.credentials.Credentials;
+import com.cloudbees.plugins.credentials.CredentialsDescriptor;
 import com.cloudbees.plugins.credentials.impl.UsernamePasswordCredentialsImpl;
+import com.cloudbees.plugins.credentials.common.StandardCredentials;
 import com.cloudbees.plugins.credentials.common.StandardUsernamePasswordCredentials;
 import hudson.security.ACL;
+import com.cloudbees.plugins.credentials.impl.BaseStandardCredentials;
 
 
 import com.cloudbees.plugins.credentials.domains.DomainRequirement;
@@ -103,6 +110,7 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
     private Secret accessTokenSecret;
     private String fileName;
     private String credentialsId;
+
 
     @DataBoundConstructor
     public CodeThreatBuilder(String ctServer, Integer max_number_of_critical, Integer max_number_of_high, String weakness_is, String condition, String project_name, String fileName, String credentialsId ) throws IOException {
@@ -531,14 +539,15 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
             Map<String, Object> kbFields = (Map<String, Object>) issueJson.get("kb_fields");
             Map<String, Object> title = (Map<String, Object>) kbFields.get("title");
             String titleEn = (String) title.get("en");
+            String titleWeaknessId = (String) issueState.get("weakness_id");
 
-            if (titleCount.containsKey(titleEn)) {
-                titleCount.put(titleEn, titleCount.get(titleEn) + 1);
+            if (titleCount.containsKey(titleWeaknessId)) {
+                titleCount.put(titleWeaknessId, titleCount.get(titleWeaknessId) + 1);
             } else {
-                titleCount.put(titleEn, 1);
+                titleCount.put(titleWeaknessId, 1);
             }
 
-            titleSeverity.put(titleEn, (String) issueState.get("severity"));
+            titleSeverity.put(titleWeaknessId, (String) issueState.get("severity"));
         }
 
         for (Map.Entry<String, Integer> entry : titleCount.entrySet()) {
@@ -580,7 +589,18 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
                 }
             }
 
-            accessTokenSecret = getToken(username,password);
+            if(username != null){
+                accessTokenSecret = getToken(username,password);
+            }else {
+                List<StringCredentials> stringCredentials = CredentialsProvider.lookupCredentials(StringCredentials.class, Jenkins.get(), ACL.SYSTEM, new ArrayList<DomainRequirement>());
+            
+                for (StringCredentials cred : stringCredentials) {
+                    if (cred.getId().equals(credentialsId)) {
+                        accessTokenSecret = cred.getSecret();
+                        break;
+                    }
+                }
+            }
             String fullFileName = workspace + File.separator + fileName;
             File fullFile = new File(fullFileName);
             String canonicalFilePath = fullFile.getCanonicalPath();
@@ -694,6 +714,26 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
                     listener.getLogger().println("- High --> " + high);
                     listener.getLogger().println("- Medium --> " + medium);
                     listener.getLogger().println("- Low --> " + low);
+
+                    String[] weaknessArr = weakness_is.split(",");
+                    ArrayList<String> weaknessIsCount = findWeaknessTitles(newIssue(accessTokenSecret), weaknessArr);
+
+                    if(condition == "OR"){
+                        if(max_number_of_critical != null && critical > max_number_of_critical){
+                            throw new AbortException(" ---> Critical limit exceeded. [Pipeline interrupted because the FAILED_ARGS arguments you entered were found...]");
+                        }
+                        if(max_number_of_high != null && high > max_number_of_high){
+                            throw new AbortException(" ---> High limit exceeded. [Pipeline interrupted because the FAILED_ARGS arguments you entered were found...]");
+                        }
+                        if(weaknessIsCount.size() > 0){
+                            throw new AbortException(" ---> Weaknesses entered in the weakness_is key were found during the scan. [Pipeline interrupted because the FAILED_ARGS arguments you entered were found...]");
+                        }
+                    } else if(condition == "AND"){
+                        if((max_number_of_critical != null && critical > max_number_of_critical) || (max_number_of_high != null && high > max_number_of_high) ||  weaknessIsCount.size() > 0){
+                            throw new AbortException(" ---> Not all conditions are met according to the given arguments. [Pipeline interrupted because the FAILED_ARGS arguments you entered were found...]");
+                        }
+                    }
+
                     Thread.sleep(3000);
                     scanStatus = awaitScan(scanId,accessTokenSecret);
                 }
