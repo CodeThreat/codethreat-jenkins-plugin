@@ -205,26 +205,44 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
         MediaType mediaType = MediaType.parse("application/zip");
         RequestBody fileBody = RequestBody.create(mediaType, fullFile);
         MultipartBody.Builder builder = new MultipartBody.Builder().setType(MultipartBody.FORM);
-        builder.addFormDataPart("upfile", project_name+".zip", fileBody);
+        builder.addFormDataPart("upfile", project_name + ".zip", fileBody);
         builder.addFormDataPart("project", project_name);
         builder.addFormDataPart("from", "jenkins");
         RequestBody requestBody = builder.build();
         Request request = new Request.Builder()
-                .url(ctServer+"api/plugins/jenkins")
+                .url(ctServer + "api/plugins/jenkins")
                 .post(requestBody)
                 .addHeader("Authorization", "Bearer " + accessTokenSecret)
                 .addHeader("x-ct-organization", "codethreat")
                 .addHeader("x-ct-plugin", "jenkins")
                 .build();
         Response response = client.newCall(request).execute();
-        if (!response.isSuccessful())
-            throw new IOException("Unexpected code " + response);
-
-        ResponseBody body1 = response.body();
-        if (body1 == null)
-            throw new IOException("Unexpected body to be null");
+        if (response == null) {
+            throw new IOException("Unexpected null response");
+        }
+        int statusCode = response.code();
+        if (!response.isSuccessful()) {
+            ResponseBody responseBody = response.body();
+            if (responseBody != null) {
+                String responseBodyString = responseBody.string();
+                if (!responseBodyString.isEmpty()) {
+                    ObjectMapper mapper = new ObjectMapper();
+                    JsonNode jsonNode = mapper.readTree(responseBodyString);
+                    int errorCode = jsonNode.get("code").asInt();
+                    String errorMessage = jsonNode.get("message").asText();
+                    throw new IOException("Error: " + errorMessage + " (Code: " + errorCode + ")");
+                }
+            }
+            throw new IOException("Unexpected code " + statusCode + " - " + response.message());
+        }
+        
+        ResponseBody responseBody = response.body();
+        if (responseBody == null) {
+            throw new IOException("Unexpected null response body");
+        }
+        
         ObjectMapper mapper = new ObjectMapper();
-        JsonNode jsonNode = mapper.readValue(body1.string(), JsonNode.class);
+        JsonNode jsonNode = mapper.readValue(responseBody.string(), JsonNode.class);
         return jsonNode.get("scan_id").asText();
     }
 
