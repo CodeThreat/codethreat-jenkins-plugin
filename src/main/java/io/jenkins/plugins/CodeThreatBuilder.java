@@ -110,16 +110,18 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
     private Secret accessTokenSecret;
     private String fileName;
     private String credentialsId;
+    private String organization_name;
 
 
     @DataBoundConstructor
-    public CodeThreatBuilder(String ctServer, Integer max_number_of_critical, Integer max_number_of_high, String weakness_is, String condition, String project_name, String fileName, String credentialsId ) throws IOException {
+    public CodeThreatBuilder(String ctServer, Integer max_number_of_critical, Integer max_number_of_high, String weakness_is, String condition, String project_name, String fileName, String credentialsId, String organization_name ) throws IOException {
         this.ctServer = ctServer;
         this.fileName = fileName;
         this.project_name = project_name;
         this.max_number_of_critical = max_number_of_critical;
         this.max_number_of_high = max_number_of_high;
         this.credentialsId = credentialsId;
+        this.organization_name = organization_name;
 
         if(weakness_is == null)
             this.weakness_is = "";
@@ -213,7 +215,7 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
                 .url(ctServer + "api/plugins/jenkins")
                 .post(requestBody)
                 .addHeader("Authorization", "Bearer " + accessTokenSecret)
-                .addHeader("x-ct-organization", "codethreat")
+                .addHeader("x-ct-organization", organization_name)
                 .addHeader("x-ct-plugin", "jenkins")
                 .build();
         Response response = client.newCall(request).execute();
@@ -252,7 +254,7 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
             .url(ctServer+"api/scan/status/"+scanId)
             .get()
             .addHeader("Authorization", "Bearer " + accessTokenSecret)
-            .addHeader("x-ct-organization", "codethreat")
+            .addHeader("x-ct-organization", organization_name)
             .build();
             Response response = client.newCall(request).execute();
             if (!response.isSuccessful())
@@ -393,7 +395,7 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
             .url(ctServer+"api/scanlog/issues?q="+encodedQ+"&pageSize=500")
             .get()
             .addHeader("Authorization", "Bearer " + accessTokenSecret)
-            .addHeader("x-ct-organization", "codethreat")
+            .addHeader("x-ct-organization", organization_name)
             .build();
         Response response = client.newCall(request).execute();
         if (!response.isSuccessful())
@@ -415,7 +417,7 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
                     .url(ctServer+"api/scanlog/issues?q=" + encodedQ + "&pid=" + pid + "&page=" + i)
                     .get()
                     .addHeader("Authorization", "Bearer " + accessTokenSecret)
-                    .addHeader("x-ct-organization", "codethreat")
+                    .addHeader("x-ct-organization", organization_name)
                     .build();
                 Response newResponse = client.newCall(newRequest).execute();
                 if (!response.isSuccessful())
@@ -449,7 +451,7 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
             .url(ctServer+"api/scanlog/issues?q="+encodedQ+"&pageSize=500")
             .get()
             .addHeader("Authorization", "Bearer " + accessTokenSecret)
-            .addHeader("x-ct-organization", "codethreat")
+            .addHeader("x-ct-organization", organization_name)
             .build();
         Response response = client.newCall(request).execute();
         if (!response.isSuccessful())
@@ -471,7 +473,7 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
                     .url(ctServer+"api/scanlog/issues?q=" + encodedQ + "&pid=" + pid + "&page=" + i)
                     .get()
                     .addHeader("Authorization", "Bearer " + accessTokenSecret)
-                    .addHeader("x-ct-organization", "codethreat")
+                    .addHeader("x-ct-organization", organization_name)
                     .build();
                 Response newResponse = client.newCall(newRequest).execute();
                 if (!response.isSuccessful())
@@ -623,6 +625,10 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
             File fullFile = new File(fullFileName);
             String canonicalFilePath = fullFile.getCanonicalPath();
 
+            listener.getLogger().println(" Organization Name ---> "+ organization_name);
+            listener.getLogger().println(" Workspace ---> "+ workspace);
+            listener.getLogger().println(" File Name Path ---> "+ fullFileName);
+
             String replaceString=null;
 
             if(canonicalFilePath.indexOf("/private") != -1){
@@ -701,30 +707,31 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
                         resultList.add(result);
                     }
 
+                    String resultsLink = ctServer+"issues?scan_id="+scanId+"&projectName="+project_name;
                     String durationTime = convertToHHMMSS(jsonNode.get("ended_at").asInt(),jsonNode.get("started_at").asInt());
                     String riskScore = getScore(jsonNode.get("riskscore").asInt());
 
                     if(condition == "OR"){
                         if(max_number_of_critical != null && critical > max_number_of_critical){
-                            run.addAction(new CodeThreatAction(critical,high,medium,low,total,totalCountNewIssues,newIssuesSeverity,resultList,durationTime,riskScore));
+                            run.addAction(new CodeThreatAction(critical,high,medium,low,total,totalCountNewIssues,newIssuesSeverity,resultList,durationTime,riskScore,resultsLink));
                             throw new AbortException(" ---> Critical limit exceeded");
                         }
                         if(max_number_of_high != null && high > max_number_of_high){
-                            run.addAction(new CodeThreatAction(critical,high,medium,low,total,totalCountNewIssues,newIssuesSeverity,resultList,durationTime,riskScore));
+                            run.addAction(new CodeThreatAction(critical,high,medium,low,total,totalCountNewIssues,newIssuesSeverity,resultList,durationTime,riskScore,resultsLink));
                             throw new AbortException(" ---> High limit exceeded");
                         }
                         if(weaknessIsCount.size() > 0){
-                            run.addAction(new CodeThreatAction(critical,high,medium,low,total,totalCountNewIssues,newIssuesSeverity,resultList,durationTime,riskScore));
+                            run.addAction(new CodeThreatAction(critical,high,medium,low,total,totalCountNewIssues,newIssuesSeverity,resultList,durationTime,riskScore,resultsLink));
                             throw new AbortException(" ---> Weaknesses entered in the weakness_is key were found during the scan.");
                         }
                     } else if(condition == "AND"){
                         if((max_number_of_critical != null && critical > max_number_of_critical) || (max_number_of_high != null && high > max_number_of_high) ||  weaknessIsCount.size() > 0){
-                            run.addAction(new CodeThreatAction(critical,high,medium,low,total,totalCountNewIssues,newIssuesSeverity,resultList,durationTime,riskScore));
+                            run.addAction(new CodeThreatAction(critical,high,medium,low,total,totalCountNewIssues,newIssuesSeverity,resultList,durationTime,riskScore,resultsLink));
                             throw new AbortException(" ---> Not all conditions are met according to the given arguments");
                         }
                     }
 
-                run.addAction(new CodeThreatAction(critical,high,medium,low,total,totalCountNewIssues,newIssuesSeverity,resultList,durationTime,riskScore));
+                run.addAction(new CodeThreatAction(critical,high,medium,low,total,totalCountNewIssues,newIssuesSeverity,resultList,durationTime,riskScore,resultsLink));
                     break;
                 } else {
                     listener.getLogger().println("------------- SCAN STATUS "+"(%"+jsonNode.get("progress_data").get("progress").asInt()+")"+" -------------");

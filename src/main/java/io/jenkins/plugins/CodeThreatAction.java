@@ -90,9 +90,10 @@ public class CodeThreatAction implements RunAction2  {
     private List<Map<String, Object>> resultList;
     private String durationTime;
     private String riskScore;
+    private String resultsLink;
 
 
-    public CodeThreatAction(Number critical,Number high,Number medium,Number low,Number total,Number totalCountNewIssues,Map<String, Integer> newIssuesSeverity,List<Map<String, Object>> resultList,String durationTime,String riskScore) {
+    public CodeThreatAction(Number critical,Number high,Number medium,Number low,Number total,Number totalCountNewIssues,Map<String, Integer> newIssuesSeverity,List<Map<String, Object>> resultList,String durationTime,String riskScore, String resultsLink) {
         this.critical = critical;
         this.high = high;
         this.medium = medium;
@@ -103,6 +104,7 @@ public class CodeThreatAction implements RunAction2  {
         this.resultList = resultList;
         this.durationTime = durationTime;
         this.riskScore = riskScore;
+        this.resultsLink = resultsLink;
     }
 
     private transient Run run; 
@@ -159,6 +161,10 @@ public class CodeThreatAction implements RunAction2  {
 
     public String getRiskScore() {
         return riskScore;
+    }
+
+    public String getResultsLink() {
+        return resultsLink;
     }
 
 

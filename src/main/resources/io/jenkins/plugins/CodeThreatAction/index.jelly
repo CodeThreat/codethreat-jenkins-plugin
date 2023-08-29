@@ -46,10 +46,11 @@
            <h2>Weaknesses</h2>
             <ul>
                 <j:forEach var="item" items="${it.resultList}">
-                    <li><a href='${item.link}'>🔲 ${item.title} -> ${item.count}</a></li>
+                    <li>${item.title} -> ${item.count}</li>
                 </j:forEach>
             </ul>
             <hr/>
+            <p><a href='${it.resultsLink}'>See All Results</a></p>
             <p>⏳ Duration Time --> ${it.durationTime}</p>
             <p>❗ Risk Score --> ${it.riskScore}</p>
            </html>
