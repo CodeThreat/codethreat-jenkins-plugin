@@ -45,7 +45,8 @@ pipeline {
                         weakness_is: ".*injection,buffer.over.read,mass.assigment", 
                         condition: "OR",
                         project_name: "exampleProjectName",
-                        credentialsId: "codethreat_credentials"
+                        credentialsId: "codethreat_credentials",
+                        organization_name: "ORGNAME"
                    )
                 }
             }
