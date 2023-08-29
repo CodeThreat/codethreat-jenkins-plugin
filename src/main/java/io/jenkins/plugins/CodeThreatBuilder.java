@@ -99,8 +99,8 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
     private Integer max_number_of_high;
     private String scanId;
     private String scanStatus;
-    private final String weakness_is;
-    private String condition;
+    private String weakness_is = "";
+    private String condition = "AND";
     private final String project_name;
     private String title="";
     private String severity="";
@@ -114,25 +114,32 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
 
 
     @DataBoundConstructor
-    public CodeThreatBuilder(String ctServer, Integer max_number_of_critical, Integer max_number_of_high, String weakness_is, String condition, String project_name, String fileName, String credentialsId, String organization_name ) throws IOException {
+    public CodeThreatBuilder(String ctServer, String project_name, String fileName, String credentialsId, String organization_name) throws IOException {
         this.ctServer = ctServer;
         this.fileName = fileName;
         this.project_name = project_name;
-        this.max_number_of_critical = max_number_of_critical;
-        this.max_number_of_high = max_number_of_high;
         this.credentialsId = credentialsId;
         this.organization_name = organization_name;
+    }
 
-        if(weakness_is == null)
-            this.weakness_is = "";
-        else
-            this.weakness_is = weakness_is;
+    @DataBoundSetter
+    public void setMaxNumberOfCritical(Integer max_number_of_critical) {
+        this.max_number_of_critical = max_number_of_critical;
+    }
 
-        if(condition == null)
-            this.condition = "AND";
-        else
-            this.condition = condition;
+    @DataBoundSetter
+    public void setMaxNumberOfHigh(Integer max_number_of_high) {
+        this.max_number_of_high = max_number_of_high;
+    }
 
+    @DataBoundSetter
+    public void setWeaknessIs(String weakness_is) {
+        this.weakness_is = weakness_is;
+    }
+
+    @DataBoundSetter
+    public void setCondition(String condition) {
+        this.condition = condition;
     }
 
     public String getCtServer() {
