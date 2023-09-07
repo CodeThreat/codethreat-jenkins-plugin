@@ -21,7 +21,7 @@ With CodeThreat custom rule engine, we have wide language and framework support 
 
 ## Usage
 
-An example script for Jenkins Pipeline Item should be as follows.
+- An example script for Jenkins Pipeline Item should be as follows. With username and password.
 
 ```script
 
@@ -47,6 +47,41 @@ pipeline {
                         project_name: "exampleProjectName",
                         credentialsId: "codethreat_credentials",
                         organization_name: "ORGNAME"
+                   )
+                }
+            }
+        }
+    }
+}
+
+```
+
+- To use with token
+
+```script
+
+pipeline {
+    agent any
+    stages {
+        stage("Clone") {
+            steps {
+               git url: 'https://github.com/<exampleUser>/<exampleRepo>', branch: 'main' //example file
+               sh 'zip -r example.zip .'
+            }
+        }
+        stage("Scan") {
+            steps {
+                withCredentials([string(credentialsId: 'codethreat_credentials', variable: 'accessTokenSecret')]) {
+                    CodeThreatScan(
+                        ctServer: env.ctServer_URL,
+                        fileName:"example.zip",
+                        max_number_of_high: 23,
+                        max_number_of_critical: 23,
+                        weakness_is: ".*injection,buffer.over.read,mass.assigment", 
+                        condition: "OR",
+                        project_name: "exampleProjectName",
+                        credentialsId: "codethreat_credentials",
+                        organization_name: "codethreat"
                    )
                 }
             }
