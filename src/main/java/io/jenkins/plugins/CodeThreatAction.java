@@ -91,9 +91,12 @@ public class CodeThreatAction implements RunAction2  {
     private String durationTime;
     private String riskScore;
     private String resultsLink;
+    private String report;
+    private String projectName;
+    private String fixedIssues;
 
 
-    public CodeThreatAction(Number critical,Number high,Number medium,Number low,Number total,Number totalCountNewIssues,Map<String, Integer> newIssuesSeverity,List<Map<String, Object>> resultList,String durationTime,String riskScore, String resultsLink) {
+    public CodeThreatAction(Number critical,Number high,Number medium,Number low,Number total,Number totalCountNewIssues,Map<String, Integer> newIssuesSeverity,List<Map<String, Object>> resultList,String durationTime,String riskScore, String resultsLink, String report, String projectName, String fixedIssues) {
         this.critical = critical;
         this.high = high;
         this.medium = medium;
@@ -105,6 +108,9 @@ public class CodeThreatAction implements RunAction2  {
         this.durationTime = durationTime;
         this.riskScore = riskScore;
         this.resultsLink = resultsLink;
+        this.report = report;
+        this.projectName = projectName;
+        this.fixedIssues = fixedIssues;
     }
 
     private transient Run run; 
@@ -167,10 +173,22 @@ public class CodeThreatAction implements RunAction2  {
         return resultsLink;
     }
 
+    public String getReport() {
+        return report;
+    }
+
+    public String getProjectName() {
+        return projectName;
+    }
+
+    public String getFixedIssues() {
+        return fixedIssues;
+    }
+
 
     @Override
     public String getIconFileName() {
-        return "/plugin/ctct/img/cticon.png"; 
+        return "/plugin/codethreat-scanner/img/cticon.png"; 
     }
 
     @Override

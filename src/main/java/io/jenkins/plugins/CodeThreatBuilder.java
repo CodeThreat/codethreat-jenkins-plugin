@@ -25,47 +25,21 @@ import org.kohsuke.stapler.DataBoundSetter;
 
 import java.io.File;
 import okhttp3.*;
-import okhttp3.MediaType;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.RequestBody;
-import okhttp3.Response;
-import okhttp3.MultipartBody;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.Timer;
-import java.util.TimerTask;
-import hudson.model.AbstractBuild;
-import hudson.model.BuildListener;
-import hudson.model.Run;
-import hudson.model.AbstractBuild;
 import java.util.HashMap;
 import java.util.ArrayList;
 import hudson.AbortException;
-import hudson.model.Result;
 import java.util.Base64;
-import java.net.URLEncoder;
-import java.util.Arrays;
 import java.util.Map;
 import java.util.List;
 import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 import org.json.JSONObject;
 import org.json.JSONArray;
-import java.util.StringTokenizer;
 import java.nio.charset.StandardCharsets;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import jenkins.model.Jenkins;
-import hudson.model.Job;
 import com.google.gson.reflect.TypeToken;
-import java.lang.reflect.Type;
-import java.io.BufferedWriter;
-import java.io.FileWriter;
-import java.io.FileOutputStream;
-import java.io.OutputStreamWriter;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonObject;
@@ -74,23 +48,10 @@ import org.jenkinsci.plugins.plaincredentials.StringCredentials;
 
 import hudson.util.Secret;
 import com.cloudbees.plugins.credentials.CredentialsProvider;
-import com.cloudbees.plugins.credentials.CredentialsScope;
-import com.cloudbees.plugins.credentials.CredentialsStore;
-import com.cloudbees.plugins.credentials.domains.Domain;
-import com.cloudbees.plugins.credentials.Credentials;
-import com.cloudbees.plugins.credentials.CredentialsDescriptor;
-import com.cloudbees.plugins.credentials.impl.UsernamePasswordCredentialsImpl;
-import com.cloudbees.plugins.credentials.common.StandardCredentials;
 import com.cloudbees.plugins.credentials.common.StandardUsernamePasswordCredentials;
 import hudson.security.ACL;
-import com.cloudbees.plugins.credentials.impl.BaseStandardCredentials;
-
 
 import com.cloudbees.plugins.credentials.domains.DomainRequirement;
-import javax.annotation.Nonnull;
-import java.io.File;
-import java.util.regex.Pattern;
-
 
 public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
 
@@ -99,11 +60,12 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
     private Integer max_number_of_high;
     private String scanId;
     private String scanStatus;
+    private String report;
     private String weakness_is = "";
     private String condition = "AND";
     private final String project_name;
-    private String title="";
-    private String severity="";
+    private String title = "";
+    private String severity = "";
 
     private Secret password;
     private String username;
@@ -112,9 +74,13 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
     private String credentialsId;
     private String organization_name;
 
-
     @DataBoundConstructor
-    public CodeThreatBuilder(String ctServer, String project_name, String fileName, String credentialsId, String organization_name) throws IOException {
+    public CodeThreatBuilder(String ctServer, String project_name, String fileName, String credentialsId,
+            String organization_name) throws IOException {
+
+        while (ctServer.endsWith("/")) {
+            ctServer = ctServer.substring(0, ctServer.length() - 1);
+        }
         this.ctServer = ctServer;
         this.fileName = fileName;
         this.project_name = project_name;
@@ -191,12 +157,12 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
         json.put("client_secret", password);
         RequestBody body = RequestBody.create(mediaType, json.toString());
         Request request = new Request.Builder()
-            .url(ctServer+"api/signin")
-            .post(body)
-            .build();
-            
+                .url(ctServer + "/api/signin")
+                .post(body)
+                .build();
+
         Response response = client.newCall(request).execute();
-         if (!response.isSuccessful())
+        if (!response.isSuccessful())
             throw new IOException("Unexpected code " + response);
 
         ResponseBody body1 = response.body();
@@ -207,7 +173,7 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
         JsonNode jsonNode = mapper.readValue(body1.string(), JsonNode.class);
         return Secret.fromString(jsonNode.get("access_token").asText());
     }
-    
+
     public String uploadFile(Secret accessTokenSecret, File fullFile) throws IOException {
 
         OkHttpClient client = new OkHttpClient();
@@ -219,7 +185,7 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
         builder.addFormDataPart("from", "jenkins");
         RequestBody requestBody = builder.build();
         Request request = new Request.Builder()
-                .url(ctServer + "api/plugins/jenkins")
+                .url(ctServer + "/api/plugins/jenkins")
                 .post(requestBody)
                 .addHeader("Authorization", "Bearer " + accessTokenSecret)
                 .addHeader("x-ct-organization", organization_name)
@@ -244,12 +210,12 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
             }
             throw new IOException("Unexpected code " + statusCode + " - " + response.message());
         }
-        
+
         ResponseBody responseBody = response.body();
         if (responseBody == null) {
             throw new IOException("Unexpected null response body");
         }
-        
+
         ObjectMapper mapper = new ObjectMapper();
         JsonNode jsonNode = mapper.readValue(responseBody.string(), JsonNode.class);
         return jsonNode.get("scan_id").asText();
@@ -258,19 +224,44 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
     public String awaitScan(String scanId, Secret accessTokenSecret) throws IOException {
         OkHttpClient client = new OkHttpClient();
         Request request = new Request.Builder()
-            .url(ctServer+"api/scan/status/"+scanId)
-            .get()
-            .addHeader("Authorization", "Bearer " + accessTokenSecret)
-            .addHeader("x-ct-organization", organization_name)
-            .build();
-            Response response = client.newCall(request).execute();
-            if (!response.isSuccessful())
+                .url(ctServer + "/api/scan/status/" + scanId)
+                .get()
+                .addHeader("Authorization", "Bearer " + accessTokenSecret)
+                .addHeader("x-ct-organization", organization_name)
+                .build();
+        Response response = client.newCall(request).execute();
+        if (!response.isSuccessful())
             throw new IOException("Unexpected code " + response);
 
-            ResponseBody body1 = response.body();
-            if (body1 == null)
-                throw new IOException("Unexpected body to be null");
-            return body1.string();
+        ResponseBody body1 = response.body();
+        if (body1 == null)
+            throw new IOException("Unexpected body to be null");
+        return body1.string();
+    }
+
+    public String endStatus(String scanId, Secret accessTokenSecret, String ctServer, String organization_name)
+            throws IOException {
+        String endpointURL = ctServer + "/api/plugins/helper?sid=" + scanId;
+        OkHttpClient client = new OkHttpClient();
+
+        Request request = new Request.Builder()
+                .url(endpointURL)
+                .get()
+                .addHeader("Authorization", "Bearer " + accessTokenSecret)
+                .addHeader("x-ct-organization", organization_name)
+                .addHeader("x-ct-baseURL", ctServer)
+                .addHeader("x-ct-from", "jenkins")
+                .build();
+        Response response = client.newCall(request).execute();
+        if (!response.isSuccessful())
+            throw new IOException("Unexpected code " + response);
+
+        ResponseBody responseBody = response.body();
+        if (responseBody == null) {
+            throw new IOException("Unexpected null response body");
+        }
+
+        return responseBody.string();
     }
 
     public static String convertToHHMMSS(Integer endedAt, Integer startedAt) {
@@ -304,73 +295,73 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
         score.put("startingPerc", 90);
         score.put("endingPerc", 92);
         scores.add(score);
-        
+
         score = new HashMap<>();
         score.put("score", "B+");
         score.put("startingPerc", 87);
         score.put("endingPerc", 89);
         scores.add(score);
-        
+
         score = new HashMap<>();
         score.put("score", "B");
         score.put("startingPerc", 83);
         score.put("endingPerc", 86);
         scores.add(score);
-        
+
         score = new HashMap<>();
         score.put("score", "B-");
         score.put("startingPerc", 80);
         score.put("endingPerc", 82);
         scores.add(score);
-        
+
         score = new HashMap<>();
         score.put("score", "C+");
         score.put("startingPerc", 77);
         score.put("endingPerc", 79);
         scores.add(score);
-        
+
         score = new HashMap<>();
         score.put("score", "C");
         score.put("startingPerc", 73);
         score.put("endingPerc", 76);
         scores.add(score);
-        
+
         score = new HashMap<>();
         score.put("score", "C-");
         score.put("startingPerc", 90);
         score.put("endingPerc", 92);
         scores.add(score);
-        
+
         score = new HashMap<>();
         score.put("score", "D+");
         score.put("startingPerc", 70);
         score.put("endingPerc", 72);
         scores.add(score);
-        
+
         score = new HashMap<>();
         score.put("score", "D");
         score.put("startingPerc", 67);
         score.put("endingPerc", 69);
         scores.add(score);
-        
+
         score = new HashMap<>();
         score.put("score", "D-");
         score.put("startingPerc", 63);
         score.put("endingPerc", 60);
         scores.add(score);
-        
+
         score = new HashMap<>();
         score.put("score", "C-");
         score.put("startingPerc", 60);
         score.put("endingPerc", 62);
         scores.add(score);
-        
+
         score = new HashMap<>();
         score.put("score", "F");
         score.put("startingPerc", 0);
         score.put("endingPerc", 59);
         scores.add(score);
-        
+
         for (int i = 0; i < scores.size(); i++) {
             HashMap<String, Object> score1 = scores.get(i);
             int startingPerc = (int) score1.get("startingPerc");
@@ -396,14 +387,13 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
         byte[] jsonBytes = jsonString.getBytes(StandardCharsets.UTF_8);
         String encodedQ = Base64.getEncoder().encodeToString(jsonBytes);
 
-        
         OkHttpClient client = new OkHttpClient();
         Request request = new Request.Builder()
-            .url(ctServer+"api/scanlog/issues?q="+encodedQ+"&pageSize=500")
-            .get()
-            .addHeader("Authorization", "Bearer " + accessTokenSecret)
-            .addHeader("x-ct-organization", organization_name)
-            .build();
+                .url(ctServer + "/api/scanlog/issues?q=" + encodedQ + "&pageSize=500")
+                .get()
+                .addHeader("Authorization", "Bearer " + accessTokenSecret)
+                .addHeader("x-ct-organization", organization_name)
+                .build();
         Response response = client.newCall(request).execute();
         if (!response.isSuccessful())
             throw new IOException("Unexpected code " + response);
@@ -419,29 +409,29 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
         String pid = xCtPager.getString("id");
 
         String[] extractedArray = new String[0];
-            for (int i = 1; i <= pages; i++) {
-                Request newRequest = new Request.Builder()
-                    .url(ctServer+"api/scanlog/issues?q=" + encodedQ + "&pid=" + pid + "&page=" + i)
+        for (int i = 1; i <= pages; i++) {
+            Request newRequest = new Request.Builder()
+                    .url(ctServer + "/api/scanlog/issues?q=" + encodedQ + "&pid=" + pid + "&page=" + i)
                     .get()
                     .addHeader("Authorization", "Bearer " + accessTokenSecret)
                     .addHeader("x-ct-organization", organization_name)
                     .build();
-                Response newResponse = client.newCall(newRequest).execute();
-                if (!response.isSuccessful())
-                    throw new IOException("Unexpected code " + response);
+            Response newResponse = client.newCall(newRequest).execute();
+            if (!response.isSuccessful())
+                throw new IOException("Unexpected code " + response);
 
-                ResponseBody body1 = response.body();
-                if (body1 == null)
-                    throw new IOException("Unexpected body to be null");
-                JSONArray responseArray = new JSONArray(body1.string());
-                extractedArray = new String[responseArray.length()];
+            ResponseBody body1 = response.body();
+            if (body1 == null)
+                throw new IOException("Unexpected body to be null");
+            JSONArray responseArray = new JSONArray(body1.string());
+            extractedArray = new String[responseArray.length()];
 
-                for (int j = 0; j < responseArray.length(); j++) {
-                    JSONObject item = responseArray.getJSONObject(j);
-                    extractedArray[j] = item.toString();
-                }
+            for (int j = 0; j < responseArray.length(); j++) {
+                JSONObject item = responseArray.getJSONObject(j);
+                extractedArray[j] = item.toString();
             }
-                return extractedArray;
+        }
+        return extractedArray;
     }
 
     public String[] allIssue(Secret accessTokenSecret) throws IOException {
@@ -452,17 +442,17 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
         String jsonString = query.toString();
         byte[] jsonBytes = jsonString.getBytes(StandardCharsets.UTF_8);
         String encodedQ = Base64.getEncoder().encodeToString(jsonBytes);
-        
+
         OkHttpClient client = new OkHttpClient();
         Request request = new Request.Builder()
-            .url(ctServer+"api/scanlog/issues?q="+encodedQ+"&pageSize=500")
-            .get()
-            .addHeader("Authorization", "Bearer " + accessTokenSecret)
-            .addHeader("x-ct-organization", organization_name)
-            .build();
+                .url(ctServer + "/api/scanlog/issues?q=" + encodedQ + "&pageSize=500")
+                .get()
+                .addHeader("Authorization", "Bearer " + accessTokenSecret)
+                .addHeader("x-ct-organization", organization_name)
+                .build();
         Response response = client.newCall(request).execute();
         if (!response.isSuccessful())
-                    throw new IOException("Unexpected code " + response);
+            throw new IOException("Unexpected code " + response);
 
         String headers = response.headers().get("x-ct-pager");
         if (headers == null)
@@ -475,33 +465,33 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
         String pid = xCtPager.getString("id");
 
         String[] extractedArray = new String[0];
-            for (int i = 1; i <= pages; i++) {
-                Request newRequest = new Request.Builder()
-                    .url(ctServer+"api/scanlog/issues?q=" + encodedQ + "&pid=" + pid + "&page=" + i)
+        for (int i = 1; i <= pages; i++) {
+            Request newRequest = new Request.Builder()
+                    .url(ctServer + "/api/scanlog/issues?q=" + encodedQ + "&pid=" + pid + "&page=" + i)
                     .get()
                     .addHeader("Authorization", "Bearer " + accessTokenSecret)
                     .addHeader("x-ct-organization", organization_name)
                     .build();
-                Response newResponse = client.newCall(newRequest).execute();
-                if (!response.isSuccessful())
-                    throw new IOException("Unexpected code " + response);
+            Response newResponse = client.newCall(newRequest).execute();
+            if (!response.isSuccessful())
+                throw new IOException("Unexpected code " + response);
 
-                ResponseBody body1 = response.body();
-                if (body1 == null)
-                    throw new IOException("Unexpected body to be null");
-                JSONArray responseArray = new JSONArray(body1.string());
-                extractedArray = new String[responseArray.length()];
+            ResponseBody body1 = response.body();
+            if (body1 == null)
+                throw new IOException("Unexpected body to be null");
+            JSONArray responseArray = new JSONArray(body1.string());
+            extractedArray = new String[responseArray.length()];
 
-                for (int j = 0; j < responseArray.length(); j++) {
-                    JSONObject item = responseArray.getJSONObject(j);
-                    extractedArray[j] = item.toString();
-                }
+            for (int j = 0; j < responseArray.length(); j++) {
+                JSONObject item = responseArray.getJSONObject(j);
+                extractedArray[j] = item.toString();
             }
-                return extractedArray;
+        }
+        return extractedArray;
     }
-    
+
     public static ArrayList<String> findWeaknessTitles(String[] arr, String[] keywords) {
-       
+
         ArrayList<String> failedWeaknesss = new ArrayList<>();
         for (String element : arr) {
             JsonElement jsonElement = new JsonParser().parse(element);
@@ -519,7 +509,7 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
 
     public List<Map<String, Object>> countAndGroupByTitle(String[] array1) {
         List<Map<String, Object>> nullArr = new ArrayList<Map<String, Object>>();
-        if(array1 == null || array1.length == 0){
+        if (array1 == null || array1.length == 0) {
             return nullArr;
         }
 
@@ -538,7 +528,7 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
             String severity = (String) ((Map<String, Object>) item.get("issue_state")).get("severity");
             if (!titleCounts.containsKey(title)) {
                 titleCounts.put(title, 0);
-                titleSeverity.put(title,severity);
+                titleSeverity.put(title, severity);
             }
             titleCounts.put(title, titleCounts.get(title) + 1);
         }
@@ -552,7 +542,7 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
             result.add(item);
         }
 
-       return result;
+        return result;
     }
 
     public static List<Map<String, Object>> groupIssues(String[] arr) {
@@ -561,7 +551,8 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
         List<Map<String, Object>> result = new ArrayList<>();
 
         for (String issue : arr) {
-            Map<String, Object> issueJson = new Gson().fromJson(issue, new TypeToken<Map<String, Object>>(){}.getType());
+            Map<String, Object> issueJson = new Gson().fromJson(issue, new TypeToken<Map<String, Object>>() {
+            }.getType());
             Map<String, Object> issueState = (Map<String, Object>) issueJson.get("issue_state");
             Map<String, Object> kbFields = (Map<String, Object>) issueJson.get("kb_fields");
             Map<String, Object> title = (Map<String, Object>) kbFields.get("title");
@@ -603,173 +594,170 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
     }
 
     @Override
-    public void perform(Run<?, ?> run, FilePath workspace, EnvVars env, Launcher launcher, TaskListener listener) throws InterruptedException, IOException, AbortException {
+    public void perform(Run<?, ?> run, FilePath workspace, EnvVars env, Launcher launcher, TaskListener listener)
+            throws InterruptedException, IOException, AbortException {
 
+        List<StandardUsernamePasswordCredentials> credentials = CredentialsProvider.lookupCredentials(
+                StandardUsernamePasswordCredentials.class, Jenkins.get(), ACL.SYSTEM,
+                new ArrayList<DomainRequirement>());
 
-            List<StandardUsernamePasswordCredentials> credentials = CredentialsProvider.lookupCredentials(StandardUsernamePasswordCredentials.class, Jenkins.get(), ACL.SYSTEM, new ArrayList<DomainRequirement>());
-
-            for (StandardUsernamePasswordCredentials cred : credentials) {
-                if (cred.getId().equals(credentialsId)) {
+        for (StandardUsernamePasswordCredentials cred : credentials) {
+            if (cred.getId().equals(credentialsId)) {
                 username = cred.getUsername();
                 password = cred.getPassword();
                 break;
-                }
             }
+        }
 
-            if(username != null){
-                accessTokenSecret = getToken(username,password);
-            }else {
-                List<StringCredentials> stringCredentials = CredentialsProvider.lookupCredentials(StringCredentials.class, Jenkins.get(), ACL.SYSTEM, new ArrayList<DomainRequirement>());
-            
-                for (StringCredentials cred : stringCredentials) {
-                    if (cred.getId().equals(credentialsId)) {
-                        accessTokenSecret = cred.getSecret();
-                        break;
-                    }
-                }
-            }
-            String fullFileName = workspace + File.separator + fileName;
-            File fullFile = new File(fullFileName);
-            String canonicalFilePath = fullFile.getCanonicalPath();
+        if (username != null) {
+            accessTokenSecret = getToken(username, password);
+        } else {
+            List<StringCredentials> stringCredentials = CredentialsProvider.lookupCredentials(StringCredentials.class,
+                    Jenkins.get(), ACL.SYSTEM, new ArrayList<DomainRequirement>());
 
-            listener.getLogger().println(" Organization Name ---> "+ organization_name);
-            listener.getLogger().println(" Workspace ---> "+ workspace);
-            listener.getLogger().println(" File Name Path ---> "+ fullFileName);
-
-            String replaceString=null;
-
-            if(canonicalFilePath.indexOf("/private") != -1){
-                replaceString=canonicalFilePath.replace("/private","");
-            }
-
-            if(replaceString != null){
-                if(fullFileName.compareTo(replaceString) != 0) {
-                    throw new AbortException(" ---> Disallowed file name");
-                }
-            } else {
-                if(fullFileName.compareTo(canonicalFilePath) != 0) {
-                    throw new AbortException(" ---> Disallowed file name");
-                }
-            }
-
-        
-            scanId = uploadFile(accessTokenSecret,fullFile);
-            scanStatus = awaitScan(scanId,accessTokenSecret);
-            listener.getLogger().println(" ---> SCAN STARTED!");
-
-            while(true){
-
-                ObjectMapper mapper = new ObjectMapper();
-                JsonNode jsonNode = mapper.readValue(scanStatus, JsonNode.class);
-                Integer critical = jsonNode.get("severities").get("critical") != null ? jsonNode.get("severities").get("critical").asInt() : 0;
-                Integer high = jsonNode.get("severities").get("high") != null ? jsonNode.get("severities").get("high").asInt() : 0;
-                Integer medium = jsonNode.get("severities").get("medium") != null ? jsonNode.get("severities").get("medium").asInt() : 0;
-                Integer low = jsonNode.get("severities").get("low") != null ? jsonNode.get("severities").get("low").asInt() : 0;
-                if (jsonNode.get("state").asText().equals("end")) {
-                    listener.getLogger().println("- Scan completed successfuly - ");
-                    listener.getLogger().println("------------- SCAN STATUS (END) "+"(%"+jsonNode.get("progress_data").get("progress").asInt()+")"+" -------------");
-                    listener.getLogger().println("- Critical --> " + critical);
-                    listener.getLogger().println("- High --> " + high);
-                    listener.getLogger().println("- Medium --> " + medium);
-                    listener.getLogger().println("- Low --> " + low);
-                    listener.getLogger().println("Scan Duration --> "+convertToHHMMSS(jsonNode.get("ended_at").asInt(),jsonNode.get("started_at").asInt()));
-                    listener.getLogger().println("Risk Score --> "+getScore(jsonNode.get("riskscore").asInt()));
-
-                    String[] weaknessArr = weakness_is.split(",");
-                    ArrayList<String> weaknessIsCount = findWeaknessTitles(allIssue(accessTokenSecret), weaknessArr);
-                    
-                    List<Map<String,Object>> newIssuesData = groupIssues(newIssue(accessTokenSecret));
-                    Map<String, Integer> newIssuesSeverity = countSeverity(newIssuesData);
-                    List<Map<String,Object>> allIssuesData = groupIssues(allIssue(accessTokenSecret));
-                    int totalCountNewIssues = 0;
-                    for (Map<String, Object> obj : newIssuesData) {
-                    totalCountNewIssues += (Integer) obj.get("count");
-                    }
-
-                    int total = 0;
-                    JsonNode severities = jsonNode.get("severities");
-                    for (JsonNode severity : severities) {
-                        total += severity.asInt();
-                    }
-
-                    List<Map<String, Object>> resultList = new ArrayList<>();
-                    for (Map<String, Object> item : allIssuesData) {
-                        JSONObject query = new JSONObject();
-                        query.put("projectName", project_name);
-                        query.put("issuename", item.get("title"));
-
-                        String jsonString = query.toString();
-                        byte[] jsonBytes = jsonString.getBytes(StandardCharsets.UTF_8);
-                        String encodedQ = Base64.getEncoder().encodeToString(jsonBytes);
-
-                        String link = ctServer+"issues?q="+encodedQ;
-                        String count = item.get("count").toString();
-                        String title = item.get("title").toString();
-
-                        Map<String, Object> result = new HashMap<>();
-                        result.put("link", link);
-                        result.put("count", count);
-                        result.put("title", title);
-
-                        resultList.add(result);
-                    }
-
-                    String resultsLink = ctServer+"issues?scan_id="+scanId+"&projectName="+project_name;
-                    String durationTime = convertToHHMMSS(jsonNode.get("ended_at").asInt(),jsonNode.get("started_at").asInt());
-                    String riskScore = getScore(jsonNode.get("riskscore").asInt());
-
-                    if(condition == "OR"){
-                        if(max_number_of_critical != null && critical > max_number_of_critical){
-                            run.addAction(new CodeThreatAction(critical,high,medium,low,total,totalCountNewIssues,newIssuesSeverity,resultList,durationTime,riskScore,resultsLink));
-                            throw new AbortException(" ---> Critical limit exceeded");
-                        }
-                        if(max_number_of_high != null && high > max_number_of_high){
-                            run.addAction(new CodeThreatAction(critical,high,medium,low,total,totalCountNewIssues,newIssuesSeverity,resultList,durationTime,riskScore,resultsLink));
-                            throw new AbortException(" ---> High limit exceeded");
-                        }
-                        if(weaknessIsCount.size() > 0){
-                            run.addAction(new CodeThreatAction(critical,high,medium,low,total,totalCountNewIssues,newIssuesSeverity,resultList,durationTime,riskScore,resultsLink));
-                            throw new AbortException(" ---> Weaknesses entered in the weakness_is key were found during the scan.");
-                        }
-                    } else if(condition == "AND"){
-                        if((max_number_of_critical != null && critical > max_number_of_critical) || (max_number_of_high != null && high > max_number_of_high) ||  weaknessIsCount.size() > 0){
-                            run.addAction(new CodeThreatAction(critical,high,medium,low,total,totalCountNewIssues,newIssuesSeverity,resultList,durationTime,riskScore,resultsLink));
-                            throw new AbortException(" ---> Not all conditions are met according to the given arguments");
-                        }
-                    }
-
-                run.addAction(new CodeThreatAction(critical,high,medium,low,total,totalCountNewIssues,newIssuesSeverity,resultList,durationTime,riskScore,resultsLink));
+            for (StringCredentials cred : stringCredentials) {
+                if (cred.getId().equals(credentialsId)) {
+                    accessTokenSecret = cred.getSecret();
                     break;
-                } else {
-                    listener.getLogger().println("------------- SCAN STATUS "+"(%"+jsonNode.get("progress_data").get("progress").asInt()+")"+" -------------");
-                    listener.getLogger().println("- Critical --> " + critical);
-                    listener.getLogger().println("- High --> " + high);
-                    listener.getLogger().println("- Medium --> " + medium);
-                    listener.getLogger().println("- Low --> " + low);
-
-                    String[] weaknessArr = weakness_is.split(",");
-                    ArrayList<String> weaknessIsCount = findWeaknessTitles(newIssue(accessTokenSecret), weaknessArr);
-
-                    if(condition == "OR"){
-                        if(max_number_of_critical != null && critical > max_number_of_critical){
-                            throw new AbortException(" ---> Critical limit exceeded. [Pipeline interrupted because the FAILED_ARGS arguments you entered were found...]");
-                        }
-                        if(max_number_of_high != null && high > max_number_of_high){
-                            throw new AbortException(" ---> High limit exceeded. [Pipeline interrupted because the FAILED_ARGS arguments you entered were found...]");
-                        }
-                        if(weaknessIsCount.size() > 0){
-                            throw new AbortException(" ---> Weaknesses entered in the weakness_is key were found during the scan. [Pipeline interrupted because the FAILED_ARGS arguments you entered were found...]");
-                        }
-                    } else if(condition == "AND"){
-                        if((max_number_of_critical != null && critical > max_number_of_critical) || (max_number_of_high != null && high > max_number_of_high) ||  weaknessIsCount.size() > 0){
-                            throw new AbortException(" ---> Not all conditions are met according to the given arguments. [Pipeline interrupted because the FAILED_ARGS arguments you entered were found...]");
-                        }
-                    }
-
-                    Thread.sleep(3000);
-                    scanStatus = awaitScan(scanId,accessTokenSecret);
                 }
             }
+        }
+        String fullFileName = workspace + File.separator + fileName;
+        File fullFile = new File(fullFileName);
+        String canonicalFilePath = fullFile.getCanonicalPath();
+
+        listener.getLogger().println("------------------------------");
+        listener.getLogger().println("CodeThreat Server: " + ctServer);
+        listener.getLogger().println("User: " + username);
+        listener.getLogger().println("Project: " + project_name);
+        listener.getLogger().println("Organization: " + organization_name);
+        listener.getLogger().println("------------------------------");
+
+        String replaceString = null;
+
+        if (canonicalFilePath.indexOf("/private") != -1) {
+            replaceString = canonicalFilePath.replace("/private", "");
+        }
+
+        if (replaceString != null) {
+            if (fullFileName.compareTo(replaceString) != 0) {
+                throw new AbortException(" ---> Disallowed file name");
+            }
+        } else {
+            if (fullFileName.compareTo(canonicalFilePath) != 0) {
+                throw new AbortException(" ---> Disallowed file name");
+            }
+        }
+
+        scanId = uploadFile(accessTokenSecret, fullFile);
+        scanStatus = awaitScan(scanId, accessTokenSecret);
+        listener.getLogger().println(" --- SCAN STARTED --- ");
+
+        while (true) {
+
+            ObjectMapper mapper = new ObjectMapper();
+            JsonNode jsonNode = mapper.readValue(scanStatus, JsonNode.class);
+            Integer critical = jsonNode.get("severities").get("critical") != null
+                    ? jsonNode.get("severities").get("critical").asInt()
+                    : 0;
+            Integer high = jsonNode.get("severities").get("high") != null
+                    ? jsonNode.get("severities").get("high").asInt()
+                    : 0;
+            Integer medium = jsonNode.get("severities").get("medium") != null
+                    ? jsonNode.get("severities").get("medium").asInt()
+                    : 0;
+            Integer low = jsonNode.get("severities").get("low") != null ? jsonNode.get("severities").get("low").asInt()
+                    : 0;
+            if (jsonNode.get("state").asText().equals("end")) {
+                listener.getLogger()
+                        .println("Scan completed successfuly -  " + "(%" + jsonNode.get("progress_data").get("progress").asInt() + ")"
+                                + " - Critical: " + critical + " High: " + high + " Medium: " + medium + " Low: "
+                                + low);
+                listener.getLogger().println("Scan Duration --> "
+                        + convertToHHMMSS(jsonNode.get("ended_at").asInt(), jsonNode.get("started_at").asInt()));
+                listener.getLogger().println("Risk Score --> " + getScore(jsonNode.get("riskscore").asInt()));
+
+                List<Map<String, Object>> newIssuesData = groupIssues(newIssue(accessTokenSecret));
+                Map<String, Integer> newIssuesSeverity = countSeverity(newIssuesData);
+                List<Map<String, Object>> allIssuesData = groupIssues(allIssue(accessTokenSecret));
+                int totalCountNewIssues = 0;
+                for (Map<String, Object> obj : newIssuesData) {
+                    totalCountNewIssues += (Integer) obj.get("count");
+                }
+
+                int total = 0;
+                JsonNode severities = jsonNode.get("severities");
+                for (JsonNode severity : severities) {
+                    total += severity.asInt();
+                }
+
+                List<Map<String, Object>> resultList = new ArrayList<>();
+                for (Map<String, Object> item : allIssuesData) {
+                    JSONObject query = new JSONObject();
+                    query.put("projectName", project_name);
+                    query.put("issuename", item.get("title"));
+
+                    String jsonString = query.toString();
+                    byte[] jsonBytes = jsonString.getBytes(StandardCharsets.UTF_8);
+                    String encodedQ = Base64.getEncoder().encodeToString(jsonBytes);
+
+                    String link = ctServer + "issues?q=" + encodedQ;
+                    String count = item.get("count").toString();
+                    String title = item.get("title").toString();
+
+                    Map<String, Object> result = new HashMap<>();
+                    result.put("link", link);
+                    result.put("count", count);
+                    result.put("title", title);
+
+                    resultList.add(result);
+                }
+
+                report = endStatus(scanId, accessTokenSecret, ctServer, organization_name);
+                JsonNode jsonStatus = mapper.readValue(report, JsonNode.class);
+                String resultsLink = ctServer+"/issues?scan_id="+scanId+"&projectName="+project_name;
+                String durationTime = jsonStatus.get("report").get("durationTime").asText();
+                String riskScore = jsonStatus.get("report").get("riskscore").get("score").asText();
+                String fixedIssues = jsonStatus.get("report").get("fixedIssues").asText();
+
+                run.addAction(new CodeThreatAction(critical, high, medium, low, total, totalCountNewIssues,
+                        newIssuesSeverity, resultList, durationTime, riskScore, resultsLink, report, project_name, fixedIssues));
+                break;
+            } else {
+                listener.getLogger()
+                        .println("Scanning " + "(%" + jsonNode.get("progress_data").get("progress").asInt() + ")"
+                                + " - Critical: " + critical + " High: " + high + " Medium: " + medium + " Low: "
+                                + low);
+
+                String[] weaknessArr = weakness_is.split(",");
+                ArrayList<String> weaknessIsCount = findWeaknessTitles(newIssue(accessTokenSecret), weaknessArr);
+
+                if (condition == "OR") {
+                    if (max_number_of_critical != null && critical > max_number_of_critical) {
+                        throw new AbortException(
+                                " ---> Critical limit exceeded. [Pipeline interrupted because the FAILED_ARGS arguments you entered were found...]");
+                    }
+                    if (max_number_of_high != null && high > max_number_of_high) {
+                        throw new AbortException(
+                                " ---> High limit exceeded. [Pipeline interrupted because the FAILED_ARGS arguments you entered were found...]");
+                    }
+                    if (weaknessIsCount.size() > 0) {
+                        throw new AbortException(
+                                " ---> Weaknesses entered in the weakness_is key were found during the scan. [Pipeline interrupted because the FAILED_ARGS arguments you entered were found...]");
+                    }
+                } else if (condition == "AND") {
+                    if ((max_number_of_critical != null && critical > max_number_of_critical)
+                            || (max_number_of_high != null && high > max_number_of_high)
+                            || weaknessIsCount.size() > 0) {
+                        throw new AbortException(
+                                " ---> Not all conditions are met according to the given arguments. [Pipeline interrupted because the FAILED_ARGS arguments you entered were found...]");
+                    }
+                }
+
+                Thread.sleep(3000);
+                scanStatus = awaitScan(scanId, accessTokenSecret);
+            }
+        }
     }
 
     @Symbol("CodeThreatScan")
