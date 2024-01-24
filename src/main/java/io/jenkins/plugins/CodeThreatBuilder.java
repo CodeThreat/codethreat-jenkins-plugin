@@ -715,7 +715,7 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
 
                 report = endStatus(scanId, accessTokenSecret, ctServer, organization_name);
                 JsonNode jsonStatus = mapper.readValue(report, JsonNode.class);
-                String resultsLink = ctServer+"/issues?scan_id="+scanId+"&projectName="+project_name;
+                String resultsLink = ctServer+"/issues?scan_id="+scanId+"&projectName="+project_name+"&tenant="+organization_name;
                 String durationTime = jsonStatus.get("report").get("durationTime").asText();
                 String riskScore = jsonStatus.get("report").get("riskscore").get("score").asText();
                 String fixedIssues = jsonStatus.get("report").get("fixedIssues").asText();
