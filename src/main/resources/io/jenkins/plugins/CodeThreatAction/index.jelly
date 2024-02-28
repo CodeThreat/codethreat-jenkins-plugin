@@ -42,6 +42,30 @@
                 <div class="p-5 mt-3">
                     <canvas id="barChart" width="400" height="150"></canvas>
                 </div>
+                <div class="container mt-5">
+                    <h3 class="text-center my-4 mb-3">SCA Dependency Vulnerabilities</h3>
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Dependency</th>
+                                <th>Issues</th>
+                                <th>License</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        <j:forEach var="dep" items="${it.scaDeps}">
+                            <tr>
+                                <td>${dep.unique_id}</td>
+                                <td>Critical:${dep.countSca.CRITICAL} - High:${dep.countSca.HIGH} - Medium:${dep.countSca.MEDIUM} - Low:${dep.countSca.LOW}</td>
+                                <td>
+                                    <j:set var="firstLicense" value="${dep.license.get(0)}"/>
+                                    ${firstLicense.Name}
+                                </td>
+                            </tr>
+                        </j:forEach>
+                        </tbody>
+                    </table>
+                </div>
                 <div class="row justify-content-center mt-5">
                     <div class="col-lg-8 text-center">
                         <p><strong>Duration Time:</strong>${it.durationTime}</p>

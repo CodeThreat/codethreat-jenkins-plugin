@@ -94,9 +94,10 @@ public class CodeThreatAction implements RunAction2  {
     private String report;
     private String projectName;
     private String fixedIssues;
+    private JsonNode scaDeps;
 
 
-    public CodeThreatAction(Number critical,Number high,Number medium,Number low,Number total,Number totalCountNewIssues,Map<String, Integer> newIssuesSeverity,List<Map<String, Object>> resultList,String durationTime,String riskScore, String resultsLink, String report, String projectName, String fixedIssues) {
+    public CodeThreatAction(Number critical,Number high,Number medium,Number low,Number total,Number totalCountNewIssues,Map<String, Integer> newIssuesSeverity,List<Map<String, Object>> resultList,String durationTime,String riskScore, String resultsLink, String report, String projectName, String fixedIssues, JsonNode scaDeps) {
         this.critical = critical;
         this.high = high;
         this.medium = medium;
@@ -111,6 +112,7 @@ public class CodeThreatAction implements RunAction2  {
         this.report = report;
         this.projectName = projectName;
         this.fixedIssues = fixedIssues;
+        this.scaDeps = scaDeps;
     }
 
     private transient Run run; 
@@ -183,6 +185,10 @@ public class CodeThreatAction implements RunAction2  {
 
     public String getFixedIssues() {
         return fixedIssues;
+    }
+
+    public JsonNode getScaDeps() {
+        return scaDeps;
     }
 
 

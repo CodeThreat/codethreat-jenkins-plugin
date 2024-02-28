@@ -58,6 +58,8 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
     private final String ctServer;
     private Integer max_number_of_critical;
     private Integer max_number_of_high;
+    private Integer sca_max_number_of_critical;
+    private Integer sca_max_number_of_high;
     private String scanId;
     private String scanStatus;
     private String report;
@@ -73,6 +75,7 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
     private String fileName;
     private String credentialsId;
     private String organization_name;
+    private String policy_name;
 
     @DataBoundConstructor
     public CodeThreatBuilder(String ctServer, String project_name, String fileName, String credentialsId,
@@ -92,10 +95,20 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
     public void setMaxNumberOfCritical(Integer max_number_of_critical) {
         this.max_number_of_critical = max_number_of_critical;
     }
-
+    
     @DataBoundSetter
     public void setMaxNumberOfHigh(Integer max_number_of_high) {
         this.max_number_of_high = max_number_of_high;
+    }
+
+    @DataBoundSetter
+    public void setScaMaxNumberOfCritical(Integer sca_max_number_of_critical) {
+        this.sca_max_number_of_critical = sca_max_number_of_critical;
+    }
+
+    @DataBoundSetter
+    public void setScaMaxNumberOfHigh(Integer sca_max_number_of_high) {
+        this.sca_max_number_of_high = sca_max_number_of_high;
     }
 
     @DataBoundSetter
@@ -106,6 +119,11 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
     @DataBoundSetter
     public void setCondition(String condition) {
         this.condition = condition;
+    }
+
+    @DataBoundSetter
+    public void setPolicyName(String policy_name) {
+        this.policy_name = policy_name;
     }
 
     public String getCtServer() {
@@ -128,6 +146,14 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
         return max_number_of_high;
     }
 
+    public Integer getScaMaxNumberOfCritical() {
+        return sca_max_number_of_critical;
+    }
+
+    public Integer getScaMaxNumberOfHigh() {
+        return sca_max_number_of_high;
+    }
+
     public String getWeaknessIs() {
         return weakness_is;
     }
@@ -146,6 +172,10 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
 
     public String getSeverity() {
         return severity;
+    }
+
+    public String getPolicyName() {
+        return policy_name;
     }
 
     public Secret getToken(String username, Secret password) throws IOException {
@@ -183,6 +213,9 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
         builder.addFormDataPart("upfile", project_name + ".zip", fileBody);
         builder.addFormDataPart("project", project_name);
         builder.addFormDataPart("from", "jenkins");
+        if(policy_name != null){
+            builder.addFormDataPart("policy_id", policy_name);
+        }
         RequestBody requestBody = builder.build();
         Request request = new Request.Builder()
                 .url(ctServer + "/api/plugins/jenkins")
@@ -719,9 +752,53 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
                 String durationTime = jsonStatus.get("report").get("durationTime").asText();
                 String riskScore = jsonStatus.get("report").get("riskscore").get("score").asText();
                 String fixedIssues = jsonStatus.get("report").get("fixedIssues").asText();
+                JsonNode scaDeps = jsonStatus.get("report").get("scaDeps");
+
+                Integer scaCritical = jsonStatus.get("report").get("scaSeverityCounts").get("Critical") != null
+                ? jsonStatus.get("report").get("scaSeverityCounts").get("Critical").asInt()
+                : 0;
+                Integer scaHigh = jsonStatus.get("report").get("scaSeverityCounts").get("High") != null
+                ? jsonStatus.get("report").get("scaSeverityCounts").get("High").asInt()
+                : 0;
+
+                String[] weaknessArr = weakness_is.split(",");
+                ArrayList<String> weaknessIsCount = findWeaknessTitles(newIssue(accessTokenSecret), weaknessArr);
+
+                if (condition == "OR") {
+                    if (max_number_of_critical != null && critical > max_number_of_critical) {
+                        throw new AbortException(
+                                " ---> Critical limit exceeded. [Pipeline interrupted because the FAILED_ARGS arguments you entered were found...]");
+                    }
+                    if (max_number_of_high != null && high > max_number_of_high) {
+                        throw new AbortException(
+                                " ---> High limit exceeded. [Pipeline interrupted because the FAILED_ARGS arguments you entered were found...]");
+                    }
+                    if (weaknessIsCount.size() > 0) {
+                        throw new AbortException(
+                                " ---> Weaknesses entered in the weakness_is key were found during the scan. [Pipeline interrupted because the FAILED_ARGS arguments you entered were found...]");
+                    }
+                    if (sca_max_number_of_critical != null && scaCritical > sca_max_number_of_critical) {
+                        throw new AbortException(
+                                " ---> Sca Critical limit exceeded. [Pipeline interrupted because the FAILED_ARGS arguments you entered were found...]");
+                    }
+                    if (sca_max_number_of_high != null && scaHigh > sca_max_number_of_high) {
+                        throw new AbortException(
+                                " ---> Sca High limit exceeded. [Pipeline interrupted because the FAILED_ARGS arguments you entered were found...]");
+                    }
+                } else if (condition == "AND") {
+                    if ((max_number_of_critical != null && critical > max_number_of_critical)
+                            || (max_number_of_high != null && high > max_number_of_high)
+                            || (sca_max_number_of_critical != null && scaCritical > sca_max_number_of_critical)
+                            || (sca_max_number_of_high != null && scaHigh > sca_max_number_of_high)
+                            || weaknessIsCount.size() > 0) {
+                        throw new AbortException(
+                                " ---> Not all conditions are met according to the given arguments. [Pipeline interrupted because the FAILED_ARGS arguments you entered were found...]");
+                    }
+                }
+
 
                 run.addAction(new CodeThreatAction(critical, high, medium, low, total, totalCountNewIssues,
-                        newIssuesSeverity, resultList, durationTime, riskScore, resultsLink, report, project_name, fixedIssues));
+                        newIssuesSeverity, resultList, durationTime, riskScore, resultsLink, report, project_name, fixedIssues, scaDeps));
                 break;
             } else {
                 listener.getLogger()
