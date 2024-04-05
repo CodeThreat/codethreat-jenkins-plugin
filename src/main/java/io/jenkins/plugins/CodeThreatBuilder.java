@@ -272,9 +272,9 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
         return body1.string();
     }
 
-    public String endStatus(String scanId, Secret accessTokenSecret, String ctServer, String organization_name)
+    public String endStatus(String scanId, Secret accessTokenSecret, String ctServer, String organization_name, String project_name)
             throws IOException {
-        String endpointURL = ctServer + "/api/plugins/helper?sid=" + scanId;
+        String endpointURL = ctServer + "/api/plugins/helper?sid=" + scanId + "&project_name=" + project_name;
         OkHttpClient client = new OkHttpClient();
 
         Request request = new Request.Builder()
@@ -746,7 +746,7 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
                     resultList.add(result);
                 }
 
-                report = endStatus(scanId, accessTokenSecret, ctServer, organization_name);
+                report = endStatus(scanId, accessTokenSecret, ctServer, organization_name, project_name);
                 JsonNode jsonStatus = mapper.readValue(report, JsonNode.class);
                 String resultsLink = ctServer+"/issues?scan_id="+scanId+"&projectName="+project_name+"&tenant="+organization_name;
                 String durationTime = jsonStatus.get("report").get("durationTime").asText();
