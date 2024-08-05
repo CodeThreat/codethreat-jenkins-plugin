@@ -98,12 +98,15 @@ pipeline {
 
 ## Args
 
-| Variable  | Example Value &nbsp;| Description &nbsp; | Type | Required | Default |
-| ------------- | ------------- | ------------- |------------- | ------------- | ------------- |
-| max_number_of_critical | 23 | Failed condition for maximum critical number of found issues | Number | No | N/A
-| max_number_of_high | 23 | Failed condition for maximum high number of found issues | Number | No | N/A
-| weakness_is | ".*injection,buffer.over.read,mass.assigment" | Failed condition for found issues weakness id's. | String | No | N/A
-| condition | "OR" | It checks failed arguments(max_number_of_critical, max_number_of_high)  using with "and" or "or". | String | No | AND
+| Variable | Example Value | Description | Type | Required | Default |
+| --- | --- | --- | --- | --- | --- |
+| maxNumberOfCritical | 15 | Failed condition for maximum critical number of found issues | Number | No | N/A |
+| maxNumberOfHigh | 15 | Failed condition for maximum high number of found issues | Number | No | N/A |
+| scaMaxNumberOfCritical | 15 | Failed condition for maximum critical number of found sca issues | Number | No | N/A |
+| scaMaxNumberOfHigh | 15 | Failed condition for maximum high number of found sca issues | Number | No | N/A |
+| weaknessIs | ".*injection,buffer.over.read,mass.assigment" | Failed condition for found issues weakness id's. | String | No | N/A |
+| condition | "OR" | It checks failed arguments(max_number_of_critical etc.) using with "and" or "or". | String | No | AND |
+| policyName | “Advanced Security” | For example, Advanced Security, SAST Scan, SCA Scan, etc. By default Advanced Security. | String | No | Advanced Security |
 
 
 ## Credentials
