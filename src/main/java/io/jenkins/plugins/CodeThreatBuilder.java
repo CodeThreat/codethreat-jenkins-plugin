@@ -297,232 +297,6 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
         return responseBody.string();
     }
 
-    public static String convertToHHMMSS(Integer endedAt, Integer startedAt) {
-
-        int durationInMilliseconds = endedAt - startedAt;
-        int durationInMinutes = durationInMilliseconds / (1000 * 60);
-        int hours = durationInMinutes / 60;
-        int minutes = durationInMinutes % 60;
-        int seconds = (durationInMilliseconds % (1000 * 60)) / 1000;
-        return String.format("%02d:%02d:%02d", hours, minutes, seconds);
-    }
-
-    public static String getScore(Integer percentage) {
-        ArrayList<HashMap<String, Object>> scores = new ArrayList<>();
-        HashMap<String, Object> score;
-
-        score = new HashMap<>();
-        score.put("score", "A+");
-        score.put("startingPerc", 97);
-        score.put("endingPerc", 100);
-        scores.add(score);
-
-        score = new HashMap<>();
-        score.put("score", "A");
-        score.put("startingPerc", 93);
-        score.put("endingPerc", 96);
-        scores.add(score);
-
-        score = new HashMap<>();
-        score.put("score", "A-");
-        score.put("startingPerc", 90);
-        score.put("endingPerc", 92);
-        scores.add(score);
-
-        score = new HashMap<>();
-        score.put("score", "B+");
-        score.put("startingPerc", 87);
-        score.put("endingPerc", 89);
-        scores.add(score);
-
-        score = new HashMap<>();
-        score.put("score", "B");
-        score.put("startingPerc", 83);
-        score.put("endingPerc", 86);
-        scores.add(score);
-
-        score = new HashMap<>();
-        score.put("score", "B-");
-        score.put("startingPerc", 80);
-        score.put("endingPerc", 82);
-        scores.add(score);
-
-        score = new HashMap<>();
-        score.put("score", "C+");
-        score.put("startingPerc", 77);
-        score.put("endingPerc", 79);
-        scores.add(score);
-
-        score = new HashMap<>();
-        score.put("score", "C");
-        score.put("startingPerc", 73);
-        score.put("endingPerc", 76);
-        scores.add(score);
-
-        score = new HashMap<>();
-        score.put("score", "C-");
-        score.put("startingPerc", 90);
-        score.put("endingPerc", 92);
-        scores.add(score);
-
-        score = new HashMap<>();
-        score.put("score", "D+");
-        score.put("startingPerc", 70);
-        score.put("endingPerc", 72);
-        scores.add(score);
-
-        score = new HashMap<>();
-        score.put("score", "D");
-        score.put("startingPerc", 67);
-        score.put("endingPerc", 69);
-        scores.add(score);
-
-        score = new HashMap<>();
-        score.put("score", "D-");
-        score.put("startingPerc", 63);
-        score.put("endingPerc", 60);
-        scores.add(score);
-
-        score = new HashMap<>();
-        score.put("score", "C-");
-        score.put("startingPerc", 60);
-        score.put("endingPerc", 62);
-        scores.add(score);
-
-        score = new HashMap<>();
-        score.put("score", "F");
-        score.put("startingPerc", 0);
-        score.put("endingPerc", 59);
-        scores.add(score);
-
-        for (int i = 0; i < scores.size(); i++) {
-            HashMap<String, Object> score1 = scores.get(i);
-            int startingPerc = (int) score1.get("startingPerc");
-            int endingPerc = (int) score1.get("endingPerc");
-
-            if (percentage >= startingPerc && percentage <= endingPerc) {
-                return score1.get("score").toString();
-            }
-        }
-        return null;
-    }
-
-    public String[] newIssue(Secret accessTokenSecret) throws IOException {
-
-        JSONArray historical = new JSONArray();
-        historical.put("New Issue");
-
-        JSONObject query = new JSONObject();
-        query.put("projectName", project_name);
-        query.put("historical", historical);
-
-        String jsonString = query.toString();
-        byte[] jsonBytes = jsonString.getBytes(StandardCharsets.UTF_8);
-        String encodedQ = Base64.getEncoder().encodeToString(jsonBytes);
-
-        OkHttpClient client = new OkHttpClient();
-        Request request = new Request.Builder()
-                .url(ctServer + "/api/scanlog/issues?q=" + encodedQ + "&pageSize=500")
-                .get()
-                .addHeader("Authorization", "Bearer " + accessTokenSecret)
-                .addHeader("x-ct-organization", organization_name)
-                .build();
-        Response response = client.newCall(request).execute();
-        if (!response.isSuccessful())
-            throw new IOException("Unexpected code " + response);
-
-        String headers = response.headers().get("x-ct-pager");
-        if (headers == null)
-            throw new IOException("Unexpected body to be null");
-        byte[] headerBytes = headers.getBytes(StandardCharsets.UTF_8);
-        String jsonString1 = new String(Base64.getDecoder().decode(headerBytes), StandardCharsets.UTF_8);
-        JSONObject xCtPager = new JSONObject(jsonString1);
-
-        int pages = xCtPager.getInt("pages");
-        String pid = xCtPager.getString("id");
-
-        String[] extractedArray = new String[0];
-        for (int i = 1; i <= pages; i++) {
-            Request newRequest = new Request.Builder()
-                    .url(ctServer + "/api/scanlog/issues?q=" + encodedQ + "&pid=" + pid + "&page=" + i)
-                    .get()
-                    .addHeader("Authorization", "Bearer " + accessTokenSecret)
-                    .addHeader("x-ct-organization", organization_name)
-                    .build();
-            Response newResponse = client.newCall(newRequest).execute();
-            if (!response.isSuccessful())
-                throw new IOException("Unexpected code " + response);
-
-            ResponseBody body1 = response.body();
-            if (body1 == null)
-                throw new IOException("Unexpected body to be null");
-            JSONArray responseArray = new JSONArray(body1.string());
-            extractedArray = new String[responseArray.length()];
-
-            for (int j = 0; j < responseArray.length(); j++) {
-                JSONObject item = responseArray.getJSONObject(j);
-                extractedArray[j] = item.toString();
-            }
-        }
-        return extractedArray;
-    }
-
-    public String[] allIssue(Secret accessTokenSecret) throws IOException {
-
-        JSONObject query = new JSONObject();
-        query.put("projectName", project_name);
-
-        String jsonString = query.toString();
-        byte[] jsonBytes = jsonString.getBytes(StandardCharsets.UTF_8);
-        String encodedQ = Base64.getEncoder().encodeToString(jsonBytes);
-
-        OkHttpClient client = new OkHttpClient();
-        Request request = new Request.Builder()
-                .url(ctServer + "/api/scanlog/issues?q=" + encodedQ + "&pageSize=500")
-                .get()
-                .addHeader("Authorization", "Bearer " + accessTokenSecret)
-                .addHeader("x-ct-organization", organization_name)
-                .build();
-        Response response = client.newCall(request).execute();
-        if (!response.isSuccessful())
-            throw new IOException("Unexpected code " + response);
-
-        String headers = response.headers().get("x-ct-pager");
-        if (headers == null)
-            throw new IOException("Unexpected body to be null");
-        byte[] headerBytes = headers.getBytes(StandardCharsets.UTF_8);
-        String jsonString1 = new String(Base64.getDecoder().decode(headerBytes), StandardCharsets.UTF_8);
-        JSONObject xCtPager = new JSONObject(jsonString1);
-
-        int pages = xCtPager.getInt("pages");
-        String pid = xCtPager.getString("id");
-
-        String[] extractedArray = new String[0];
-        for (int i = 1; i <= pages; i++) {
-            Request newRequest = new Request.Builder()
-                    .url(ctServer + "/api/scanlog/issues?q=" + encodedQ + "&pid=" + pid + "&page=" + i)
-                    .get()
-                    .addHeader("Authorization", "Bearer " + accessTokenSecret)
-                    .addHeader("x-ct-organization", organization_name)
-                    .build();
-            Response newResponse = client.newCall(newRequest).execute();
-            if (!response.isSuccessful())
-                throw new IOException("Unexpected code " + response);
-
-            ResponseBody body1 = response.body();
-            if (body1 == null)
-                throw new IOException("Unexpected body to be null");
-            JSONArray responseArray = new JSONArray(body1.string());
-            extractedArray = new String[responseArray.length()];
-
-            for (int j = 0; j < responseArray.length(); j++) {
-                JSONObject item = responseArray.getJSONObject(j);
-                extractedArray[j] = item.toString();
-            }
-        }
-        return extractedArray;
-    }
-
     public static ArrayList<String> findWeaknessTitles(String[] arr, String[] keywords) {
 
         ArrayList<String> failedWeaknesss = new ArrayList<>();
@@ -538,92 +312,6 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
             }
         }
         return failedWeaknesss;
-    }
-
-    public List<Map<String, Object>> countAndGroupByTitle(String[] array1) {
-        List<Map<String, Object>> nullArr = new ArrayList<Map<String, Object>>();
-        if (array1 == null || array1.length == 0) {
-            return nullArr;
-        }
-
-        List<Map<String, Object>> array = new ArrayList<Map<String, Object>>();
-        for (String item : array1) {
-            Map<String, Object> map = new HashMap<String, Object>();
-            map.put("title", item);
-            array.add(map);
-        }
-
-        Map<String, Integer> titleCounts = new HashMap<String, Integer>();
-        Map<String, String> titleSeverity = new HashMap<String, String>();
-        for (Map<String, Object> item : array) {
-            Map<String, Map<String, String>> kbFields = (Map<String, Map<String, String>>) item.get("kb_fields");
-            String title = kbFields.get("title").get("en");
-            String severity = (String) ((Map<String, Object>) item.get("issue_state")).get("severity");
-            if (!titleCounts.containsKey(title)) {
-                titleCounts.put(title, 0);
-                titleSeverity.put(title, severity);
-            }
-            titleCounts.put(title, titleCounts.get(title) + 1);
-        }
-
-        List<Map<String, Object>> result = new ArrayList<Map<String, Object>>();
-        for (Map.Entry<String, Integer> entry : titleCounts.entrySet()) {
-            Map<String, Object> item = new HashMap<String, Object>();
-            item.put("title", title);
-            item.put("count", titleCounts.get(title));
-            item.put("severity", titleSeverity.get(title));
-            result.add(item);
-        }
-
-        return result;
-    }
-
-    public static List<Map<String, Object>> groupIssues(String[] arr) {
-        Map<String, Integer> titleCount = new HashMap<>();
-        Map<String, String> titleSeverity = new HashMap<>();
-        List<Map<String, Object>> result = new ArrayList<>();
-
-        for (String issue : arr) {
-            Map<String, Object> issueJson = new Gson().fromJson(issue, new TypeToken<Map<String, Object>>() {
-            }.getType());
-            Map<String, Object> issueState = (Map<String, Object>) issueJson.get("issue_state");
-            Map<String, Object> kbFields = (Map<String, Object>) issueJson.get("kb_fields");
-            Map<String, Object> title = (Map<String, Object>) kbFields.get("title");
-            String titleEn = (String) title.get("en");
-            String titleWeaknessId = (String) issueState.get("weakness_id");
-
-            if (titleCount.containsKey(titleWeaknessId)) {
-                titleCount.put(titleWeaknessId, titleCount.get(titleWeaknessId) + 1);
-            } else {
-                titleCount.put(titleWeaknessId, 1);
-            }
-
-            titleSeverity.put(titleWeaknessId, (String) issueState.get("severity"));
-        }
-
-        for (Map.Entry<String, Integer> entry : titleCount.entrySet()) {
-            Map<String, Object> groupedIssue = new HashMap<>();
-            groupedIssue.put("title", entry.getKey());
-            groupedIssue.put("count", entry.getValue());
-            groupedIssue.put("severity", titleSeverity.get(entry.getKey()));
-            result.add(groupedIssue);
-        }
-
-        return result;
-    }
-
-    public static Map<String, Integer> countSeverity(List<Map<String, Object>> list) {
-        Map<String, Integer> result = new HashMap<>();
-        result.put("critical", 0);
-        result.put("high", 0);
-        result.put("medium", 0);
-        result.put("low", 0);
-        for (Map<String, Object> item : list) {
-            String severity = (String) item.get("severity");
-            int count = (int) item.get("count");
-            result.put(severity, result.get(severity) + count);
-        }
-        return result;
     }
 
     @Override
@@ -684,71 +372,44 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
 
         scanId = uploadFile(accessTokenSecret, fullFile);
         scanStatus = awaitScan(scanId, accessTokenSecret);
-        listener.getLogger().println(" --- SCAN STARTED --- ");
+        listener.getLogger().println("[CodeThreat]: Scan Started.");
 
         while (true) {
 
             ObjectMapper mapper = new ObjectMapper();
             JsonNode jsonNode = mapper.readValue(scanStatus, JsonNode.class);
-            Integer critical = jsonNode.get("severities").get("critical") != null
-                    ? jsonNode.get("severities").get("critical").asInt()
+            if(jsonNode.get("state").asText().equals("failure")){
+                throw new AbortException("[CodeThreat]: Scan Failed.");
+            }
+            Integer critical = jsonNode.get("sast_severities").get("critical") != null
+                    ? jsonNode.get("sast_severities").get("critical").asInt()
                     : 0;
-            Integer high = jsonNode.get("severities").get("high") != null
-                    ? jsonNode.get("severities").get("high").asInt()
+            Integer high = jsonNode.get("sast_severities").get("high") != null
+                    ? jsonNode.get("sast_severities").get("high").asInt()
                     : 0;
-            Integer medium = jsonNode.get("severities").get("medium") != null
-                    ? jsonNode.get("severities").get("medium").asInt()
+            Integer medium = jsonNode.get("sast_severities").get("medium") != null
+                    ? jsonNode.get("sast_severities").get("medium").asInt()
                     : 0;
-            Integer low = jsonNode.get("severities").get("low") != null ? jsonNode.get("severities").get("low").asInt()
+            Integer low = jsonNode.get("sast_severities").get("low") != null ? jsonNode.get("sast_severities").get("low").asInt()
                     : 0;
+            JsonNode weaknessesNode = jsonNode.get("weaknessArr");
+            String[] weaknessesArr;
+            if (weaknessesNode != null && weaknessesNode.isArray()) {
+                weaknessesArr = new String[weaknessesNode.size()];
+                int i = 0;
+                for (JsonNode node : weaknessesNode) {
+                    weaknessesArr[i++] = node.asText();
+                }
+            } else {
+                weaknessesArr = new String[0];
+            }
             if (jsonNode.get("state").asText().equals("end")) {
                 listener.getLogger()
-                        .println("Scan completed successfuly -  " + "(%" + jsonNode.get("progress_data").get("progress").asInt() + ")"
-                                + " - Critical: " + critical + " High: " + high + " Medium: " + medium + " Low: "
-                                + low);
-                listener.getLogger().println("Scan Duration --> "
-                        + convertToHHMMSS(jsonNode.get("ended_at").asInt(), jsonNode.get("started_at").asInt()));
-                listener.getLogger().println("Risk Score --> " + getScore(jsonNode.get("riskscore").asInt()));
-
-                List<Map<String, Object>> newIssuesData = groupIssues(newIssue(accessTokenSecret));
-                Map<String, Integer> newIssuesSeverity = countSeverity(newIssuesData);
-                List<Map<String, Object>> allIssuesData = groupIssues(allIssue(accessTokenSecret));
-                int totalCountNewIssues = 0;
-                for (Map<String, Object> obj : newIssuesData) {
-                    totalCountNewIssues += (Integer) obj.get("count");
-                }
-
-                int total = 0;
-                JsonNode severities = jsonNode.get("severities");
-                for (JsonNode severity : severities) {
-                    total += severity.asInt();
-                }
-
-                List<Map<String, Object>> resultList = new ArrayList<>();
-                for (Map<String, Object> item : allIssuesData) {
-                    JSONObject query = new JSONObject();
-                    query.put("projectName", project_name);
-                    query.put("issuename", item.get("title"));
-
-                    String jsonString = query.toString();
-                    byte[] jsonBytes = jsonString.getBytes(StandardCharsets.UTF_8);
-                    String encodedQ = Base64.getEncoder().encodeToString(jsonBytes);
-
-                    String link = ctServer + "issues?q=" + encodedQ;
-                    String count = item.get("count").toString();
-                    String title = item.get("title").toString();
-
-                    Map<String, Object> result = new HashMap<>();
-                    result.put("link", link);
-                    result.put("count", count);
-                    result.put("title", title);
-
-                    resultList.add(result);
-                }
+                        .println("[CodeThreat]: Scan completed successfully.");
 
                 report = endStatus(scanId, accessTokenSecret, ctServer, organization_name, project_name);
                 JsonNode jsonStatus = mapper.readValue(report, JsonNode.class);
-                String resultsLink = ctServer+"/issues?scan_id="+scanId+"&projectName="+project_name+"&tenant="+organization_name;
+                String resultsLink = ctServer+"/projects/project-details/"+project_name+"?branch=noBranch&type=sast&tenant="+organization_name;
                 String durationTime = jsonStatus.get("report").get("durationTime").asText();
                 String riskScore = jsonStatus.get("report").get("riskscore").get("score").asText();
                 String fixedIssues = jsonStatus.get("report").get("fixedIssues").asText();
@@ -762,7 +423,7 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
                 : 0;
 
                 String[] weaknessArr = weakness_is.split(",");
-                ArrayList<String> weaknessIsCount = findWeaknessTitles(newIssue(accessTokenSecret), weaknessArr);
+                ArrayList<String> weaknessIsCount = findWeaknessTitles(weaknessesArr, weaknessArr);
 
                 if (condition == "OR") {
                     if (max_number_of_critical != null && critical > max_number_of_critical) {
@@ -797,17 +458,14 @@ public class CodeThreatBuilder extends Builder implements SimpleBuildStep {
                 }
 
 
-                run.addAction(new CodeThreatAction(critical, high, medium, low, total, totalCountNewIssues,
-                        newIssuesSeverity, resultList, durationTime, riskScore, resultsLink, report, project_name, fixedIssues, scaDeps));
+                run.addAction(new CodeThreatAction(critical, high, medium, low, durationTime, riskScore, resultsLink, report, project_name, fixedIssues, scaDeps));
                 break;
             } else {
                 listener.getLogger()
-                        .println("Scanning " + "(%" + jsonNode.get("progress_data").get("progress").asInt() + ")"
-                                + " - Critical: " + critical + " High: " + high + " Medium: " + medium + " Low: "
-                                + low);
+                        .println("[CodeThreat]: Scan Status | Scanning...");
 
-                String[] weaknessArr = weakness_is.split(",");
-                ArrayList<String> weaknessIsCount = findWeaknessTitles(newIssue(accessTokenSecret), weaknessArr);
+                String[] keywords = weakness_is.split(",");
+                ArrayList<String> weaknessIsCount = findWeaknessTitles(weaknessesArr, keywords);
 
                 if (condition == "OR") {
                     if (max_number_of_critical != null && critical > max_number_of_critical) {

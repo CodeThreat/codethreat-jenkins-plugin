@@ -43,25 +43,27 @@
                     <canvas id="barChart" width="400" height="150"></canvas>
                 </div>
                 <div class="container mt-5">
-                    <h3 class="text-center my-4 mb-3">SCA Dependency Vulnerabilities</h3>
-                    <table class="table">
+                    <h2 class="text-center my-4 mb-3">SCA Dependency Vulnerabilities</h2>
+                    <table class="summary-table deps-table">
                         <thead>
                             <tr>
                                 <th>Dependency</th>
                                 <th>Issues</th>
-                                <th>License</th>
                             </tr>
                         </thead>
                         <tbody>
-                        <j:forEach var="dep" items="${it.scaDeps}">
-                            <tr>
-                                <td>${dep.unique_id}</td>
-                                <td>Critical:${dep.countSca.CRITICAL} - High:${dep.countSca.HIGH} - Medium:${dep.countSca.MEDIUM} - Low:${dep.countSca.LOW}</td>
-                                <td>
-                                    <j:set var="firstLicense" value="${dep.license.get(0)}"/>
-                                    ${firstLicense.Name}
-                                </td>
+                        <j:forEach var="pkg" items="${it.scaDeps}">
+                            <tr style="background-color: rgb(140, 140, 140); font-weight: bold; text-align: left;">
+                                <td colspan="3">------------- ${pkg.target} -------------</td>
                             </tr>
+                            <j:forEach var="dep" items="${pkg.data}">
+                                <j:forEach var="issue" items="${dep.issues}">
+                                    <tr>
+                                        <td>${dep.unique_id != null ? dep.unique_id : 'N/A'}</td>
+                                        <td>${issue.title != null ? issue.title : 'No title'}</td>
+                                    </tr>
+                                </j:forEach>
+                            </j:forEach>
                         </j:forEach>
                         </tbody>
                     </table>

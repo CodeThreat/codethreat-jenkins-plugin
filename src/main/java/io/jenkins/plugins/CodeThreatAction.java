@@ -84,10 +84,6 @@ public class CodeThreatAction implements RunAction2  {
     private Number high;
     private Number medium;
     private Number low;
-    private Number total;
-    private Number totalCountNewIssues;
-    private Map<String, Integer> newIssuesSeverity;
-    private List<Map<String, Object>> resultList;
     private String durationTime;
     private String riskScore;
     private String resultsLink;
@@ -97,15 +93,11 @@ public class CodeThreatAction implements RunAction2  {
     private JsonNode scaDeps;
 
 
-    public CodeThreatAction(Number critical,Number high,Number medium,Number low,Number total,Number totalCountNewIssues,Map<String, Integer> newIssuesSeverity,List<Map<String, Object>> resultList,String durationTime,String riskScore, String resultsLink, String report, String projectName, String fixedIssues, JsonNode scaDeps) {
+    public CodeThreatAction(Number critical,Number high,Number medium,Number low, String durationTime,String riskScore, String resultsLink, String report, String projectName, String fixedIssues, JsonNode scaDeps) {
         this.critical = critical;
         this.high = high;
         this.medium = medium;
         this.low = low;
-        this.total = total;
-        this.totalCountNewIssues = totalCountNewIssues;
-        this.newIssuesSeverity = newIssuesSeverity;
-        this.resultList = resultList;
         this.durationTime = durationTime;
         this.riskScore = riskScore;
         this.resultsLink = resultsLink;
@@ -145,22 +137,6 @@ public class CodeThreatAction implements RunAction2  {
 
     public Number getLow() {
         return low;
-    }
-
-    public Number getTotal() {
-        return total;
-    }
-
-    public Number getTotalCountNewIssues() {
-        return totalCountNewIssues;
-    }
-
-    public Map<String, Integer> getNewIssuesSeverity() {
-        return newIssuesSeverity;
-    }
-
-    public List<Map<String, Object>> getResultList() {
-        return resultList;
     }
 
     public String getDurationTime() {
